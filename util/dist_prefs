@@ -75,7 +75,7 @@ export ACC_PLOT_DISPLAY_TYPE="X"
 #       http://macports.org
 #       
 #-----------------------------------------------------------
-export ACC_ENABLE_OPENMP="N"
+export ACC_ENABLE_OPENMP="Y"
 
 
 #-----------------------------------------------------------
@@ -87,7 +87,7 @@ export ACC_ENABLE_OPENMP="N"
 #       requested Fortran compiler, or it will be built
 #       from included source code in this Distribution.
 #-----------------------------------------------------------
-export ACC_ENABLE_MPI="N"
+export ACC_ENABLE_MPI="Y"
 
 
 #-----------------------------------------------------------
@@ -124,7 +124,7 @@ export ACC_ENABLE_GFORTRAN_OPTIMIZATION="Y"
 # ACC_ENABLE_SHARED_ONLY must set to "N" if
 # ACC_ENABLE_SHARED is set to "Y"
 #-----------------------------------------------------------
-export ACC_ENABLE_SHARED="N"
+export ACC_ENABLE_SHARED="Y"
 
 
 #-----------------------------------------------------------
