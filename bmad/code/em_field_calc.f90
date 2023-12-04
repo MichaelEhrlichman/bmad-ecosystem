@@ -187,7 +187,12 @@ endif
 ! Custom field calc 
 
 if (ele%field_calc == custom$) then
-  call em_field_custom (ele, param, s_pos, orbit, local_ref_frame, field, calc_dfield, err_flag, &
+  if (.not. associated(em_field_custom_ptr)) then
+    call out_io (s_error$, r_name, 'FIELD_CALC == CUSTOM INVALID SINCE EM_FIELD_CUSTOM_PTR HAS NOT BEEN SET IN THIS PROGRAM!')
+    orbit%state = lost$
+    return
+  endif
+  call em_field_custom_ptr (ele, param, s_pos, orbit, local_ref_frame, field, calc_dfield, err_flag, &
                                     calc_potential, use_overlap, grid_allow_s_out_of_bounds, rf_time, used_eles)
   return
 end if
@@ -313,15 +318,15 @@ case (bmad_standard$)
     ! The crab cavity is modeled as a TM110 traveling wave mode
     if (ele%value(l$) /= 0) then
       voltage = e_accel_field(ele, voltage$) / ref_charge
-      k_rf = twopi * ele%value(rf_frequency$) / c_light
       if (present(rf_time)) then
         time = rf_time
       else
-        time = particle_rf_time(orbit, ele, .true., s_body)
+        time = particle_rf_time(orbit, ele, .false., s_body)
       endif
       phase = twopi * (ele%value(phi0$) + ele%value(phi0_multipass$) + ele%value(phi0_autoscale$) - &
-                      (time - rf_ref_time_offset(ele)) * ele%value(rf_frequency$)) + k_rf * s_body
+                      (time - rf_ref_time_offset(ele) - s_body/c_light) * ele%value(rf_frequency$))
 
+      k_rf = twopi * ele%value(rf_frequency$) / c_light
       field%B(2) = -voltage * sin(phase) / (c_light * ele%value(l$))
       field%E(3) = voltage * k_rf * orbit%beta * orbit%vec(1) * cos(phase) / ele%value(l$)
     endif
@@ -329,7 +334,7 @@ case (bmad_standard$)
   !------------------
   ! Drift, et. al. Note that kicks get added at the end for all elements
 
-  case (drift$, ecollimator$, rcollimator$, instrument$, monitor$, pipe$, marker$, detector$)
+  case (drift$, ecollimator$, rcollimator$, instrument$, monitor$, pipe$, marker$, detector$, thick_multipole$)
 
   !------------------
   ! E_Gun

@@ -661,12 +661,13 @@ do i = 1, n_key$
   if (i == floor_shift$)  cycle
   if (i == patch$)        cycle
 
-  call init_attribute_name1 (i, tilt_tot$,      'TILT_TOT', dependent$)
-  call init_attribute_name1 (i, x_offset_tot$,  'X_OFFSET_TOT', dependent$)
-  call init_attribute_name1 (i, y_offset_tot$,  'Y_OFFSET_TOT', dependent$)
-  call init_attribute_name1 (i, z_offset_tot$,  'Z_OFFSET_TOT', dependent$)
-  call init_attribute_name1 (i, x_pitch_tot$,   'X_PITCH_TOT', dependent$)
-  call init_attribute_name1 (i, y_pitch_tot$,   'Y_PITCH_TOT', dependent$)
+  call init_attribute_name1 (i, tilt_tot$,        'TILT_TOT', dependent$)
+  call init_attribute_name1 (i, x_offset_tot$,    'X_OFFSET_TOT', dependent$)
+  call init_attribute_name1 (i, y_offset_tot$,    'Y_OFFSET_TOT', dependent$)
+  call init_attribute_name1 (i, z_offset_tot$,    'Z_OFFSET_TOT', dependent$)
+  call init_attribute_name1 (i, x_pitch_tot$,     'X_PITCH_TOT', dependent$)
+  call init_attribute_name1 (i, y_pitch_tot$,     'Y_PITCH_TOT', dependent$)
+  call init_attribute_name1 (i, dispatch$,        'dispatch', private$)
 
   if (i == multilayer_mirror$) cycle
   if (i == mirror$)            cycle
@@ -689,7 +690,7 @@ do i = 1, n_key$
   call init_attribute_name1 (i, l$,                    'L')
 
   if (i == converter$)         cycle
-  if (i == foil$)          cycle
+  if (i == foil$)              cycle
 
   call init_attribute_name1 (i, symplectify$,          'SYMPLECTIFY')
   call init_attribute_name1 (i, taylor_map_includes_offsets$,    'TAYLOR_MAP_INCLUDES_OFFSETS')
@@ -803,7 +804,7 @@ do i = 1, n_key$
   select case (i)
   case (ac_kicker$, elseparator$, kicker$, octupole$, quadrupole$, sbend$, rbend$, &
          sextupole$, solenoid$, sol_quad$, ab_multipole$, wiggler$, undulator$, &
-         hkicker$, vkicker$, sad_mult$)
+         hkicker$, vkicker$, sad_mult$, thick_multipole$)
     attrib_array(i, a0$:a21$)%name = ['A0 ', &
                                    'A1 ', 'A2 ', 'A3 ', 'A4 ', 'A5 ', & 
                                    'A6 ', 'A7 ', 'A8 ', 'A9 ', 'A10', &
@@ -936,8 +937,9 @@ call init_attribute_name1 (converter$, pc_out_max$,                 'PC_OUT_MAX'
 call init_attribute_name1 (converter$, angle_out_max$,              'ANGLE_OUT_MAX')
 call init_attribute_name1 (converter$, species_out$,                'SPECIES_OUT')
 
-call init_attribute_name1 (foil$, thickness$,                   'THICKNESS')
-call init_attribute_name1 (foil$, material_type$,               'MATERIAL_TYPE')
+call init_attribute_name1 (foil$, thickness$,                       'THICKNESS')
+call init_attribute_name1 (foil$, material_type$,                   'MATERIAL_TYPE')
+call init_attribute_name1 (foil$, final_charge$,                    'FINAL_CHARGE')
 
 call init_attribute_name1 (lens$, l$,                               'L')
 call init_attribute_name1 (lens$, radius$,                          'RADIUS')
@@ -1124,6 +1126,8 @@ call init_attribute_name1 (em_field$, autoscale_phase$,             'AUTOSCALE_P
 call init_attribute_name1 (em_field$, phi0$,                        'PHI0')
 call init_attribute_name1 (em_field$, phi0_err$,                    'PHI0_ERR')
 call init_attribute_name1 (em_field$, constant_ref_energy$,         'CONSTANT_REF_ENERGY')
+call init_attribute_name1 (em_field$, polarity$,                    'POLARITY')
+
 
 call init_attribute_name1 (girder$, l$,                             'L', dependent$)
 call init_attribute_name1 (girder$, x_offset$,                      'X_OFFSET')
@@ -1250,12 +1254,9 @@ call init_attribute_name1 (match$, y1$,                             'Y1')
 call init_attribute_name1 (match$, py1$,                            'PY1')
 call init_attribute_name1 (match$, z1$,                             'Z1')
 call init_attribute_name1 (match$, pz1$,                            'PZ1')
-call init_attribute_name1 (match$, phase_trombone_input$,           'PHASE_TROMBONE_INPUT', dependent$)
-call init_attribute_name1 (match$, phase_trombone$,                 'PHASE_TROMBONE')
-call init_attribute_name1 (match$, match_end_input$,                'MATCH_END_INPUT', dependent$)
-call init_attribute_name1 (match$, match_end$,                      'MATCH_END')
-call init_attribute_name1 (match$, match_end_orbit_input$,          'MATCH_END_ORBIT_INPUT', dependent$)
-call init_attribute_name1 (match$, match_end_orbit$,                'MATCH_END_ORBIT')
+call init_attribute_name1 (match$, matrix$,                         'MATRIX')
+call init_attribute_name1 (match$, kick0$,                          'KICK0')
+call init_attribute_name1 (match$, recalc$,                         'RECALC')
 call init_attribute_name1 (match$, is_on$,                          'IS_ON')
 call init_attribute_name1 (match$, c11_mat0$,                       'C11_MAT0')
 call init_attribute_name1 (match$, c12_mat0$,                       'C12_MAT0')
@@ -1381,6 +1382,13 @@ call init_attribute_name1 (octupole$, gen_grad_map$,                'GEN_GRAD_MA
 call init_attribute_name1 (octupole$, grid_field$,                  'GRID_FIELD')
 call init_attribute_name1 (octupole$, ptc_canonical_coords$,        'PTC_CANONICAL_COORDS')
 
+call init_attribute_name1 (thick_multipole$, field_master$,         'FIELD_MASTER')
+call init_attribute_name1 (thick_multipole$, cartesian_map$,        'CARTESIAN_MAP')
+call init_attribute_name1 (thick_multipole$, cylindrical_map$,      'CYLINDRICAL_MAP')
+call init_attribute_name1 (thick_multipole$, gen_grad_map$,         'GEN_GRAD_MAP')
+call init_attribute_name1 (thick_multipole$, grid_field$,           'GRID_FIELD')
+call init_attribute_name1 (thick_multipole$, ptc_canonical_coords$, 'PTC_CANONICAL_COORDS')
+
 call init_attribute_name1 (patch$, l$,                              'L', quasi_free$)
 call init_attribute_name1 (patch$, user_sets_length$,               'USER_SETS_LENGTH')
 call init_attribute_name1 (patch$, t_offset$,                       'T_OFFSET')
@@ -1400,6 +1408,7 @@ call init_attribute_name1 (crab_cavity$, voltage$,                  'VOLTAGE')
 call init_attribute_name1 (crab_cavity$, phi0$,                     'PHI0')
 call init_attribute_name1 (crab_cavity$, phi0_multipass$,           'PHI0_MULTIPASS')
 call init_attribute_name1 (crab_cavity$, harmon$,                   'HARMON')
+call init_attribute_name1 (crab_cavity$, harmon_master$,            'HARMON_MASTER')
 call init_attribute_name1 (crab_cavity$, cartesian_map$,            'CARTESIAN_MAP')
 call init_attribute_name1 (crab_cavity$, cylindrical_map$,          'CYLINDRICAL_MAP')
 call init_attribute_name1 (crab_cavity$, gen_grad_map$,             'GEN_GRAD_MAP')
@@ -1408,10 +1417,10 @@ call init_attribute_name1 (crab_cavity$, gradient$,                 'GRADIENT', 
 call init_attribute_name1 (crab_cavity$, rf_frequency$,             'RF_FREQUENCY')
 call init_attribute_name1 (crab_cavity$, rf_wavelength$,            'RF_WAVELENGTH', dependent$)
 call init_attribute_name1 (crab_cavity$, rf_clock_harmonic$,        'rf_clock_harminic', private$)
-call init_attribute_name1 (crab_cavity$, field_autoscale$,          'FIELD_AUTOSCALE', private$)  ! Not yet used
-call init_attribute_name1 (crab_cavity$, phi0_autoscale$,           'PHI0_AUTOSCALE', private$)  ! Not yet used
+call init_attribute_name1 (crab_cavity$, field_autoscale$,          'FIELD_AUTOSCALE', private$)      ! Not yet used
+call init_attribute_name1 (crab_cavity$, phi0_autoscale$,           'PHI0_AUTOSCALE', private$)       ! Not yet used
 call init_attribute_name1 (crab_cavity$, autoscale_amplitude$,      'AUTOSCALE_AMPLITUDE', private$)  ! Not yet used
-call init_attribute_name1 (crab_cavity$, autoscale_phase$,          'AUTOSCALE_PHASE', private$)  ! Not yet used
+call init_attribute_name1 (crab_cavity$, autoscale_phase$,          'AUTOSCALE_PHASE', private$)      ! Not yet used
 call init_attribute_name1 (crab_cavity$, field_master$,             'FIELD_MASTER')
 
 call init_attribute_name1 (rfcavity$, longitudinal_mode$,           'LONGITUDINAL_MODE')
@@ -1427,6 +1436,7 @@ call init_attribute_name1 (rfcavity$, rf_clock_harmonic$,           'rf_clock_ha
 call init_attribute_name1 (rfcavity$, phi0_multipass$,              'PHI0_MULTIPASS')
 call init_attribute_name1 (rfcavity$, phi0$,                        'PHI0')
 call init_attribute_name1 (rfcavity$, harmon$,                      'HARMON', quasi_free$)
+call init_attribute_name1 (rfcavity$, harmon_master$,               'HARMON_MASTER')
 call init_attribute_name1 (rfcavity$, coupler_strength$,            'COUPLER_STRENGTH')
 call init_attribute_name1 (rfcavity$, coupler_angle$,               'COUPLER_ANGLE')
 call init_attribute_name1 (rfcavity$, coupler_phase$,               'COUPLER_PHASE')
@@ -1461,6 +1471,7 @@ call init_attribute_name1 (rf_bend$, rf_clock_harmonic$,            'rf_clock_ha
 call init_attribute_name1 (rf_bend$, phi0_multipass$,               'PHI0_MULTIPASS')
 call init_attribute_name1 (rf_bend$, phi0$,                         'PHI0')
 call init_attribute_name1 (rf_bend$, harmon$,                       'HARMON', quasi_free$)
+call init_attribute_name1 (rf_bend$, harmon_master$,                'HARMON_MASTER')
 call init_attribute_name1 (rf_bend$, dg$,                           'DG', private$)
 call init_attribute_name1 (rf_bend$, db_field$,                     'DB_FIELD', private$)
 
@@ -1875,27 +1886,27 @@ endif
 !
 
 select case (attrib_name)
-case ('MATCH_END', 'MATCH_END_ORBIT', 'NO_END_MARKER', 'SYMPLECTIFY', 'IS_ON', 'LIVE_BRANCH', &
+case ('NO_END_MARKER', 'SYMPLECTIFY', 'IS_ON', 'LIVE_BRANCH', 'HARMON_MASTER', &
       'APERTURE_LIMIT_ON', 'ABSOLUTE_TIME_TRACKING', 'AUTOSCALE_PHASE', 'GANG', &
       'AUTOSCALE_AMPLITUDE', 'PTC_EXACT_MODEL', 'PTC_EXACT_MISALIGN', 'HIGH_ENERGY_SPACE_CHARGE_ON', &
       'TAYLOR_MAP_INCLUDES_OFFSETS', 'OFFSET_MOVES_APERTURE', 'FIELD_MASTER', 'SCALE_MULTIPOLES', &
       'FLEXIBLE', 'NEW_BRANCH', 'SPIN_FRINGE_ON', 'REF_TIME_OFFSET', 'WRAP_SUPERIMPOSE', &
       'BRANCHES_ARE_COHERENT', 'E_CENTER_RELATIVE_TO_REF', 'SCALE_FIELD_TO_ONE', &
-      'MULTIPOLES_ON', 'LR_SELF_WAKE_ON', 'MATCH_END_INPUT', 'MATCH_END_ORBIT_INPUT', 'GEO', &
+      'MULTIPOLES_ON', 'LR_SELF_WAKE_ON', 'GEO', &
       'CONSTANT_REF_ENERGY', 'CREATE_JUMBO_SLAVE', 'PTC_CANONICAL_COORDS', 'LR_WAKE%SELF_WAKE_ON', &
       'SR_WAKE%SCALE_WITH_LENGTH', 'IS_MOSAIC', 'INHERIT_FROM_FORK', 'MODE_FLIP', &
-      'EXACT_MODEL', 'EXACT_MISALIGN', 'OLD_INTEGRATOR', 'PHASE_TROMBONE', 'PHASE_TROMBONE_INPUT', &
+      'EXACT_MODEL', 'EXACT_MISALIGN', 'OLD_INTEGRATOR', &
       'MODE_FLIP0', 'MODE_FLIP1', 'STATIC_LINEAR_MAP', 'USER_SETS_LENGTH', 'USE_REFLECTIVITY_TABLE')
   attrib_type = is_logical$
 
 case ('TAYLOR_ORDER', 'N_SLICE', 'DIRECTION', 'TIME_DIR', 'N_PARTICLE', 'VERTICAL_KICK', 'N_CELL', &
       'IX_TO_BRANCH', 'IX_TO_ELEMENT', 'NUM_STEPS', 'INTEGRATOR_ORDER', 'N_SLAVE', 'N_LORD', &
       'MAX_FRINGE_ORDER', 'UPSTREAM_ELE_DIR', 'DOWNSTREAM_ELE_DIR', 'RUNGE_KUTTA_ORDER', &
-      'SAD_N_DIV_MAX', 'LONGITUDINAL_MODE', 'MOSAIC_DIFFRACTION_NUM')
+      'SAD_N_DIV_MAX', 'LONGITUDINAL_MODE', 'MOSAIC_DIFFRACTION_NUM', 'FINAL_CHARGE')
   attrib_type = is_integer$
 
 case ('APERTURE_AT', 'APERTURE_TYPE', 'COUPLER_AT', 'FIELD_CALC', 'EXACT_MULTIPOLES', &
-      'FRINGE_TYPE', 'GEOMETRY', 'FRINGE_AT', 'MAT6_CALC_METHOD', &
+      'FRINGE_TYPE', 'GEOMETRY', 'FRINGE_AT', 'MAT6_CALC_METHOD', 'MATRIX', 'KICK0', &
       'ORIGIN_ELE_REF_PT', 'PARTICLE', 'PTC_FIELD_GEOMETRY', 'DEFAULT_TRACKING_SPECIES', &
       'PTC_INTEGRATION_TYPE', 'SPIN_TRACKING_METHOD', 'PTC_FRINGE_GEOMETRY', 'INTERPOLATION', &
       'TRACKING_METHOD', 'REF_ORBIT_FOLLOWS', 'REF_COORDS', 'MODE', 'CAVITY_TYPE', 'FIELD_TYPE', &
@@ -1911,7 +1922,7 @@ case ('TYPE', 'ALIAS', 'DESCRIP', 'SR_WAKE_FILE', 'LR_WAKE_FILE', 'LATTICE', 'PH
 
 case ('CARTESIAN_MAP', 'CYLINDRICAL_MAP', 'FIELD_OVERLAPS', 'GEN_GRAD_MAP', 'GRID_FIELD', 'REF_ORBIT', &
       'SUPERIMPOSE', 'H_MISALIGN', 'DISPLACEMENT', 'SEGMENTED', 'PIXEL', 'TERM', 'ENERGY_PROBABILITY_CURVE', &
-      'VAR', 'WALL', 'AMP_VS_TIME', 'FREQUENCIES', 'X_KNOT', 'SR_WAKE', 'LR_WAKE', 'CURVATURE')
+      'VAR', 'WALL', 'AMP_VS_TIME', 'FREQUENCIES', 'X_KNOT', 'SR_WAKE', 'LR_WAKE', 'CURVATURE', 'REFLECTIVITY_TABLE')
   attrib_type = is_struct$
 
 case default
@@ -2043,7 +2054,7 @@ case ('DELTA_E', 'ENERGY', 'E_CENTER', 'E2_CENTER', 'E_LOSS', 'E_PHOTON', 'E_TOT
       'PC_OUT_MIN', 'PC_OUT_MAX', 'E_TOT_STRONG')
   attrib_units = 'eV'
 
-case ('DELTA_REF_TIME', 'REF_TIME', 'T', 'T_OFFSET', 'DELTA_TIME', 'DT_MAX')
+case ('DELTA_REF_TIME', 'REF_TIME', 'REF_TIME_START', 'T', 'T_OFFSET', 'DELTA_TIME', 'DT_MAX')
   attrib_units = 'sec'
 
 case ('EMITTANCE_A', 'EMITTANCE_B', 'EMITTANCE_Z')
@@ -2348,13 +2359,15 @@ case ('GRID^TYPE')      ! This is for the Tao "python" command
 
 case ('INTERPOLATION')
   call get_this_attrib_name (attrib_val_name, ix_attrib_val, interpolation_name, lbound(interpolation_name, 1))
-  if (present(is_default)) then
-    is_default = (ix_attrib_val == cubic$)
-  endif
+  if (present(is_default)) is_default = (ix_attrib_val == cubic$)
 
 case ('KEY')
     call get_this_attrib_name (attrib_val_name, ix_attrib_val, key_name, lbound(key_name, 1))
   if (present(is_default)) is_default = .false.
+
+case ('KICK0')
+  call get_this_attrib_name (attrib_val_name, ix_attrib_val, kick0_name, lbound(kick0_name, 1))  
+  if (present(is_default)) is_default = (ix_attrib_val == standard$)
 
 case ('LORD_STATUS')
   call get_this_attrib_name (attrib_val_name, ix_attrib_val, control_name, lbound(control_name, 1))  
@@ -2366,6 +2379,10 @@ case ('MAT6_CALC_METHOD')
     call default_ele(ele, ele2)
     is_default = (ix_attrib_val == ele2%mat6_calc_method)
   endif
+
+case ('MATRIX')
+  call get_this_attrib_name (attrib_val_name, ix_attrib_val, matrix_name, lbound(matrix_name, 1))  
+  if (present(is_default)) is_default = (ix_attrib_val == standard$)
 
 case ('MODE')
   if (ele%key == diffraction_plate$ .or. ele%key == sample$ .or. ele%key == mask$) then
@@ -3083,7 +3100,7 @@ case ('E_TOT', 'P0C')
   if (.not. dep_attribs_free .and. ele%lord_status == multipass_lord$ .and. &
                       .not. ele%field_master .and. nint(ele%value(multipass_ref_energy$)) == user_set$) then
     select case (ele%key)
-    case (quadrupole$, sextupole$, octupole$, solenoid$, sol_quad$, sbend$, rf_bend$, &
+    case (quadrupole$, sextupole$, octupole$, thick_multipole$, solenoid$, sol_quad$, sbend$, rf_bend$, &
           hkicker$, vkicker$, kicker$, ac_kicker$, elseparator$, lcavity$, rfcavity$)
       return  ! Is free
     end select

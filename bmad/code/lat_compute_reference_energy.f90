@@ -543,7 +543,8 @@ if (key == em_field$ .and. is_false(ele%value(constant_ref_energy$))) key = lcav
 if (key == converter$) then
   ele%ref_species = ele%converter%species_out
 elseif (key == foil$) then
-  n = atomic_number(ele0%ref_species)
+  if (ele%value(final_charge$) == real_garbage$) ele%value(final_charge$) = atomic_number(ele0%ref_species)
+  n = nint(ele%value(final_charge$))
   ele%ref_species = set_species_charge(ele0%ref_species, n)
 else
   ele%ref_species = ele0%ref_species
@@ -600,7 +601,6 @@ case (lcavity$)
 
   ! Track. With runge_kutta (esp fixed step with only a few steps), a shift in the end energy can cause 
   ! small changes in the tracking. So if there has been a shift in the end energy, track again.
-  
 
   if (do_track) then
     do i = 1, 5
@@ -800,7 +800,11 @@ call set_ptc_base_state('TOTALPATH', .true., totalpath_saved)
 call zero_errors_in_ele (ele, changed)
 call init_coord (orb_start, ele%time_ref_orb_in, ele, upstream_end$, shift_vec6 = .false.)
 if (is_inside) orb_start%location = inside$ ! To avoid entrance kick in time RK tracking
+
+ele%value(dispatch$) = no_misalignment$
 call track1 (orb_start, ele, param, orb_end, ignore_radiation = .true.)
+ele%value(dispatch$) = 0
+
 if (.not. particle_is_moving_forward(orb_end)) then
   call out_io (s_fatal$, r_name, 'PARTICLE LOST IN TRACKING: ' // ele%name, &
                                  'CANNOT COMPUTE REFERENCE TIME & ENERGY.')
@@ -863,11 +867,6 @@ if (ele%slave_status == super_slave$ .or. ele%slave_status == slice_slave$ .or. 
     call zero_errors_in_ele (lord, changed)
     if (changed) has_changed = .true.
   enddo
-endif
-
-if (ele_has_nonzero_offset(ele)) then
-  call zero_ele_offsets (ele)
-  has_changed = .true.
 endif
 
 if (ele_has_nonzero_kick(ele)) then

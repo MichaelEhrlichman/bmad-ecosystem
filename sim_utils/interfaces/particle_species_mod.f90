@@ -22,13 +22,15 @@
 !   CC   = Charge (2 Hex digits with range [-127, 127]). Set to 0 for subatomic particles.
 !   PP   = Particle ID (2 Hex digits with range [0, 255]).
 !           if PP = 0                --> Used for subatomic particles.
-!           if 0 < PP < 200 (C8 Hex) --> Atom with PP = # Protons 
+!           if 0 < PP < 199 (C8 Hex) --> Atom with PP = # Protons 
+!           if PP = 199 (C8 Hex)     --> Anti atom.
 !           if PP = 200 (C8 Hex)     --> Molecule of unknown type.
 !           if PP > 200 (C8 Hex)     --> "Named" molecule. See molecular_name array below for a list. 
 !                                        In this case PP = Species ID. EG: nh2$ = 201, etc.
 !   MMMM (4 Hex digits):
 !          For subatomic particles (where CC = PP = 0): Particle integer ID. 
 !          For atoms: Number of nucleons. If zero then number of nucleons is unknown (EG: "C+")
+!          For anti atoms: Split MMMM = Xb13b4YY where Xb13 is number of protons (7 bits) and b4YY = number of nucleons (9bits).
 !          For Molecules: 100*Mass (That is, resolution is hundredths of an AMU). 0 = Use default (only valid for "Named" molecules).
 !
 ! Example external input names:
@@ -72,6 +74,7 @@ integer, parameter :: anti_ref_particle$ = -7
 integer, parameter :: anti_helion$       = -8
 
 integer, parameter :: lb_subatomic = -8, ub_subatomic = 9
+integer, parameter :: anti_atom$ = 199
 
 character(20), parameter:: subatomic_species_name(lb_subatomic:ub_subatomic) = [character(20):: 'Anti_Helion', &
               'Anti_Ref_Particle', 'Anti_Neutron', 'Anti_Deuteron', 'Pion-', 'Muon', 'Antiproton', 'Electron', &
@@ -140,6 +143,39 @@ real(rp) :: x0_rad_length(92) = [63.0470, 94.3221, 82.7559, 65.1899, 52.6868, 42
                                        6.4176, 6.3688, 6.2899, 6.1907, 6.0651, 6.2833, 6.1868, 6.1477, 6.0560, 6.0726, &
                                        5.9319, 5.9990]
 
+! Mean excitation energy (in eV) normalized by atomic Z. 
+! This is used in the Bethe-Bloch formula for calculating dE/dx of charged particles through matter.
+! Data from: https://physics.nist.gov/PhysRefData/XrayMassCoef/tab1.html
+!
+! This is suplemented with values from:
+!     Hans Bichsel,
+!    "Stopping Power of Fast Charged Particles in Heavy Elements",
+!     NIST NISTIR 4550, April 1991.
+! Values in this paper are from the b_e column in table 1 (pg 34) and are for 19 element in the range Z = 57 to 92.
+
+real(rp), parameter :: mean_excitation_energy_over_z(92) = [ &
+                19.20, 20.90, 13.33, 15.93, 15.20, 13.00, 11.71, 11.88, 12.78, 13.70, &
+                13.55, 13.00, 12.77, 12.36, 11.53, 11.25, 10.24, 10.44, 10.00,  9.55, &
+                10.29, 10.59, 10.65, 10.71, 10.88, 11.00, 11.00, 11.11, 11.10, 11.00, &
+                10.77, 10.94, 10.52, 10.24,  9.80,  9.78,  9.81,  9.63,  9.72,  9.82, &
+                10.17, 10.10,  9.95, 10.02,  9.98, 10.22, 10.00,  9.77,  9.96,  9.76, &
+                 9.55,  9.33,  9.26,  8.93,  8.87,  8.77,  8.32,  8.76,  8.64,  9.10, &
+                 9.18,  9.05,  9.21,  8.83,  9.45,  9.17,  9.55,  9.56,  9.77,  9.66, &
+                 9.77,  9.32, 10.05, 10.53,  9.81,  9.82, 10.23, 10.08, 10.00, 10.00, &
+                10.00,  9.50,  8.98,  9.88,  9.71,  9.23,  9.51,  9.39,  9.45,  8.51, &
+                 9.65,  9.09]
+
+! Table from NIST before Bichsel substitution
+! 19.20, 20.90, 13.33, 15.93, 15.20, 13.00, 11.71, 11.88, 12.78, 13.70, &
+! 13.55, 13.00, 12.77, 12.36, 11.53, 11.25, 10.24, 10.44, 10.00,  9.55, &
+! 10.29, 10.59, 10.65, 10.71, 10.88, 11.00, 11.00, 11.11, 11.10, 11.00, &
+! 10.77, 10.94, 10.52, 10.24,  9.80,  9.78,  9.81,  9.63,  9.72,  9.82, &
+! 10.17, 10.10,  9.95, 10.02,  9.98, 10.22, 10.00,  9.77,  9.96,  9.76, &
+!  9.55,  9.33,  9.26,  8.93,  8.87,  8.77,  8.79,  9.02,  9.07,  9.10, &
+!  9.18,  9.26,  9.21,  9.23,  9.45,  9.52,  9.70,  9.68,  9.77,  9.77, &
+!  9.77,  9.79,  9.84,  9.82,  9.81,  9.82,  9.83, 10.13, 10.00, 10.00, &
+! 10.00, 10.04,  9.92,  9.88,  9.71,  9.23,  9.51,  9.39,  9.45,  9.41, &
+!  9.65,  9.67]
 
 ! Isotopes from NIST data 2020/Jan.
 ! The first number in a row is the average mass for natually occuring isotope mixtures.
@@ -796,7 +832,7 @@ end function antiparticle
 ! Function species_of (mass, charge) result (species)
 !
 ! Routine to return the integer ID index of a particle species given the mass and charge.
-! Note: Currently this routine only works for subatomic particles.
+! Note: Currently this routine only works for subatomic particles and is used for decoding PTC flat files.
 !
 ! Input:
 !   mass    -- real(rp): Mass of the particle
@@ -825,7 +861,7 @@ end function species_of
 !--------------------------------------------------------------------------------------------
 !--------------------------------------------------------------------------------------------
 !+
-! Function species_id (name, default) result(species)
+! Function species_id (name, default, print_err) result(species)
 !
 ! Routine to return the integer ID index of a particle species given the name.
 !
@@ -833,23 +869,26 @@ end function species_of
 ! For all other types of particles, the case does matter.
 !
 ! Input:
-!   name    -- character(20): Name of the species.
-!   default -- integer, optional: Default species to use if name is blank or 'ref_species'.
-!               If not present, a blank name is an error.
+!   name        -- character(20): Name of the species.
+!   default     -- integer, optional: Default species to use if name is blank or 'ref_species'.
+!                   If not present, a blank name is an error.
+!   print_err   -- logical, optional: Print error message? Default is True. If False, return species = invalid$,
 !
 ! Output:
-!   species -- integer: Species ID. Will return invalid$ if name is not valid.
+!   species     -- integer: Species ID. Will return invalid$ if name is not valid.
 !                       Will return not_set$ if name is blank
 !-
 
-function species_id (name, default) result(species)
+function species_id (name, default, print_err) result(species)
 
-integer ::  species, charge, i, ix, ix1, ix2, iso, ios, n_nuc
 real(rp) :: mol_mass
 integer, optional :: default
+integer ::  species, charge, i, ix, ix1, ix2, iso, ios, n_nuc
 character(*) :: name
 character(20) :: nam
-character(40), parameter :: r_name = 'species_id'
+character(*), parameter :: r_name = 'species_id'
+logical, optional :: print_err
+logical anti, do_print
 
 ! Init
 
@@ -862,6 +901,7 @@ if (name == '' .or. upcase(name) == 'REF_SPECIES') then
   return
 endif
 
+do_print = logic_option(.true., print_err)
 species = invalid$
 iso = 0
 nam = name
@@ -924,14 +964,18 @@ if (ix > 0) then
   if (n_nuc /= 0) return  ! Isotopic number not allowed with molecules
   ! Only 3+2 digits are allowed
   if (mol_mass*100 > 99999) then
-    call out_io (s_abort$, r_name, 'SPECIFIED MOLECULE MASS TOO LARGE FOR ' // name)
-    if (global_com%exit_on_error) call err_exit
+    if (do_print) then
+      call out_io (s_abort$, r_name, 'SPECIFIED MOLECULE MASS TOO LARGE FOR ' // name)
+      if (global_com%exit_on_error) call err_exit
+    endif
     return
   endif
 
   if (n_nuc /= 0) then
-    call out_io (s_abort$, r_name, 'SPECIFYING THE NUMBER OF NUCLEONS FOR A MOLECULE IS INVALID: ' // name)
-    if (global_com%exit_on_error) call err_exit
+    if (do_print) then
+      call out_io (s_abort$, r_name, 'SPECIFYING THE NUMBER OF NUCLEONS FOR A MOLECULE IS INVALID: ' // name)
+      if (global_com%exit_on_error) call err_exit
+    endif
     return
   endif  
 
@@ -940,7 +984,21 @@ if (ix > 0) then
   return  
 endif
 
-! Is Atom?
+! Is atom or anti-atom
+
+if (mol_mass /= 0) then
+  if (do_print) then
+    call out_io (s_abort$, r_name, 'SPECIFYING A MASS FOR AN ATOM IS INVALID: ' // name)
+    if (global_com%exit_on_error) call err_exit
+  endif
+  return
+endif  
+
+anti = .false.
+if (nam(1:4) == 'anti') then
+  anti = .true.
+  nam = nam(5:)
+endif
 
 select case (nam)
 case ('Uut');  ix = 113
@@ -949,18 +1007,22 @@ case ('Uus');  ix = 117
 case ('Uuo');  ix = 118
 case default
   call match_word(nam, atomic_name, ix, .true., .false.)
-  if (ix > 0) then
-    if (mol_mass /= 0) then
-      call out_io (s_abort$, r_name, 'SPECIFYING A MASS FOR AN ATOM IS INVALID: ' // name)
+  if (ix <= 0) then
+    if (do_print) then
+      call out_io (s_error$, r_name, 'CANNOT DECODE ATOM NAME: ' // name)
       if (global_com%exit_on_error) call err_exit
-      return
-    endif  
-
-    species =  abs(charge * int(z'1000000')) + ix * int(z'10000') + n_nuc
-    if (charge < 0) species = -species
-    return  
+    endif
+    return
   endif
 end select
+
+if (anti) then
+  species = (abs(charge * int(z'1000000')) + anti_atom$ * int(z'10000') + ix * 2 * int(z'100') + n_nuc)
+else
+  species = (abs(charge * int(z'1000000')) + ix * int(z'10000') + n_nuc)
+endif
+
+if (charge < 0) species = -species
 
 !----------------------------------------------------------------------------------------
 contains
@@ -1015,8 +1077,10 @@ if (ix /= 0) then
 endif
 
 if (abs(charge) > 127) then
-  call out_io (s_abort$, r_name, 'CHARGE > 127 not allowed: ' // name)
-  if (global_com%exit_on_error) call err_exit
+  if (do_print) then
+    call out_io (s_abort$, r_name, 'CHARGE > 127 not allowed: ' // name)
+    if (global_com%exit_on_error) call err_exit
+  endif
   return
 endif
 
@@ -1099,9 +1163,17 @@ endif
 mmmm = mod(abs(species), int(z'10000'))
 name = ''
 
-! Atom
+! Atom?
+
 if (pp < 200) then
-  name = atomic_name(pp) 
+  if (pp == anti_atom$) then
+    pp = mmmm / 512
+    mmmm = mmmm - pp * 512
+    name = 'anti' // atomic_name(pp)
+  else
+    name = atomic_name(pp) 
+  endif
+
   ! Isotope?
   if (mmmm > 0) then
     write(extra, '(i0)') mmmm
@@ -1372,6 +1444,7 @@ function mass_of (species) result (mass)
 real(rp) mass
 integer n, ix, species, n_nuc, pp, charge
 character(*), parameter :: r_name = 'mass_of'
+logical anti
 
 ! Subatomic particle
 
@@ -1394,9 +1467,17 @@ endif
 pp = mod(abs(species), int(z'1000000')) / int(z'10000')
 charge = species / int(z'1000000')  ! Charge encoded in first two hex digits of species.
 
-! Atom
+! Atom?
+
 if (pp<200) then
-  n_nuc = mod(abs(species), int(z'10000'))
+  anti = (pp == anti_atom$) 
+  if (anti) then
+    pp = mod(abs(species), int(z'10000')) / 512
+    n_nuc = mod(abs(species), int(z'10000')) - pp * 512
+    charge = -charge
+  else
+    n_nuc = mod(abs(species), int(z'10000'))
+  endif
 
   if (n_nuc == 0) then
     ! Average naturally occuring mass
@@ -1512,7 +1593,12 @@ if (lb_subatomic <= species_in .and. species_in <= ub_subatomic) then
   return
 endif
 
-species_charged = species_in +  int(z'1000000') * (charge - species_in / int(z'1000000'))
+if (charge < -127 .or. charge > 127) then
+  call out_io (s_error$, r_name, 'CHARGE TO SET TO DOES NOT MAKE SENSE: ' // int_str(charge))
+  return
+endif
+
+species_charged = species_in + int(z'1000000') * (charge - species_in / int(z'1000000'))
 
 end function set_species_charge
 
@@ -1555,7 +1641,8 @@ end function x0_radiation_length
 !+
 ! Function atomic_number(species) result (atomic_num)
 !
-! Routine to return the True if species argument corresponds to an atomic particle or is a proton.
+! Routine to return the atomic number Z if species argument corresponds to an atomic particle or is a proton.
+! Set to zero otherwise.
 !
 ! Input:
 !   species       -- integer: Spicies ID.
@@ -1577,6 +1664,7 @@ if (species == proton$) then
 endif
 
 atomic_num = mod(abs(species), int(z'1000000')) / int(z'10000')
+if (atomic_num == anti_atom$) atomic_num = mod(abs(species), int(z'10000')) / 512
 if (atomic_num > 199) atomic_num = 0
 
 end function atomic_number

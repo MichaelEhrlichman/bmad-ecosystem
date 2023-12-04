@@ -50,7 +50,7 @@ character(40) use_same_lat_eles_as
 character(200) file_name
 character(200) line, search_for_lat_eles
 
-logical(4) default_key_bound, default_good_user
+logical default_key_bound, default_good_user
 logical err, free, gang
 logical searching, limited
 logical, allocatable :: dflt_good_unis(:), good_unis(:)
@@ -73,7 +73,7 @@ s%n_v1_var_used = 0
 
 if (var_file == '') then
   call tao_setup_key_table ()
-  call tao_hook_init_var()
+  if (associated(tao_hook_init_var_ptr)) call tao_hook_init_var_ptr()
   return
 endif
 
@@ -304,7 +304,7 @@ call tao_limit_calc(limited)
 
 ! Call the hook routine.
 
-call tao_hook_init_var ()
+if (associated(tao_hook_init_var_ptr)) call tao_hook_init_var_ptr()
 
 ! Record the longitudinal position
 
@@ -896,11 +896,16 @@ call pointers_to_attribute (u%base%lat, var%ele_name, var%attrib_name, .true., b
 
 ! allocate space for var%slave.
 
-n_old = size(var%slave)
-var_slave_saved = var%slave
-deallocate (var%slave)  
-allocate (var%slave(n_old+size(a_ptr)))
-var%slave(1:n_old) = var_slave_saved
+if (allocated(var%slave)) then
+  n_old = size(var%slave)
+  var_slave_saved = var%slave
+  deallocate (var%slave)  
+  allocate (var%slave(n_old+size(a_ptr)))
+  var%slave(1:n_old) = var_slave_saved
+else
+  n_old = 0
+  allocate(var%slave(size(a_ptr)))
+endif
 
 ! locate attribute
 

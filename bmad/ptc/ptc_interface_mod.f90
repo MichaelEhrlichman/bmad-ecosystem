@@ -9,7 +9,6 @@ module ptc_interface_mod
 
 use taylor_mod
 use attribute_mod
-use pointer_to_ele_mod
 use coord_mod
 use multipole_mod
 
@@ -2837,7 +2836,7 @@ if (ele%key == patch$) then
 !----------------------------------------------------------------------
 ! Not patch nor floor_shift element.
 
-elseif (use_offsets) then
+elseif (use_offsets .and. ele%value(dispatch$) /= no_misalignment$) then
 
   ! Patch elements do not have misalignments
 
@@ -3070,7 +3069,7 @@ case (crab_cavity$)
     bn(1) = 1d-9 * e_accel_field(ele, voltage$) / leng
   endif
 
-case (drift$, rfcavity$, lcavity$, ab_multipole$, multipole$, beambeam$, wiggler$, undulator$)
+case (drift$, rfcavity$, lcavity$, ab_multipole$, multipole$, beambeam$, wiggler$, undulator$, thick_multipole$)
   ! Nothing to be done
 
 case (octupole$)

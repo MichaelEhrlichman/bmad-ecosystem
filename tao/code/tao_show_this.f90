@@ -221,12 +221,7 @@ iamt = '(a, i0, 2x, 9a)'
 ramt = '(a, f0.3, 2x, 9a)'
 
 ix_branch = s%global%default_branch
-u => tao_pointer_to_universe(-1)
-lat => u%model%lat
-branch => lat%branch(ix_branch)
-model_branch => u%model_branch(ix_branch)
-tao_branch => u%model%tao_branch(ix_branch)
-design_tao_branch => u%design%tao_branch(ix_branch)
+call point_to_this_uni(-1, ix_branch, u, lat, branch, model_branch, tao_branch, design_tao_branch)
 
 phase_units = radians_to_angle_units(s%global%phase_units)
 phase_units_str = short_angle_units_name(s%global%phase_units)
@@ -2105,6 +2100,8 @@ case ('global')
     nl=nl+1; write(lines(nl), lmt) '  %label_keys                    = ', s%global%label_keys
     nl=nl+1; write(lines(nl), lmt) '  %lattice_calc_on               = ', s%global%lattice_calc_on
     nl=nl+1; write(lines(nl), lmt) '  %only_limit_opt_vars           = ', s%global%only_limit_opt_vars
+    nl=nl+1; write(lines(nl), lmt) '  %opt_match_auto_recalc         = ', s%global%opt_match_auto_recalc
+    nl=nl+1; write(lines(nl), lmt) '  %opti_write_var_file           = ', s%global%opti_write_var_file
     nl=nl+1; write(lines(nl), lmt) '  %optimizer_var_limit_warn      = ', s%global%optimizer_var_limit_warn
     nl=nl+1; write(lines(nl), amt) '  %phase_units                   = ', angle_units_name(s%global%phase_units)
     nl=nl+1; write(lines(nl), lmt) '  %rad_int_calc_on               = ', s%global%rad_int_calc_on
@@ -2867,7 +2864,14 @@ case ('lattice')
 
     case ('-universe')
       read (what2(1:ix_s2), *, iostat = ios) ix
-      u => tao_pointer_to_universe(ix)
+      if (ios /= 0) then
+        nl=1; lines(1) = 'CANNOT READ "-universe" ARGUMENT'
+        return
+      endif
+
+      call point_to_this_uni(ix, ix_branch, u, lat, branch, model_branch, tao_branch, design_tao_branch)
+      if (.not. associated(u)) return
+      
       if (ix_s2 == 0 .or. ios /= 0 .or. .not. associated(u)) then
         nl=1; lines(1) = 'CANNOT READ OR OUT-OF RANGE "-universe" ARGUMENT'
         return
@@ -2880,11 +2884,71 @@ case ('lattice')
 
   enddo
 
+  ! Find elements to use
+
+  branch => lat%branch(ix_branch)
+  if (allocated (picked_ele)) deallocate (picked_ele)
+  allocate (picked_ele(0:branch%n_ele_max))
+
+  if (by_s) then
+    ix_s2 = index(attrib0, ':')
+    if (ix_s2 == 0) then
+      nl=1; lines(1) = 'NO ":" FOUND FOR RANGE SELECTION'
+      return
+    endif
+    read (attrib0(1:ix_s2-1), *, iostat = ios1) s1
+    read (attrib0(ix_s2+1:), *, iostat = ios2) s2
+    if (ios1 /= 0 .or. ios2 /= 0) then
+      nl=1; lines(1) = 'ERROR READING RANGE SELECTION: ' // attrib0
+      return
+    endif
+
+    picked_ele = .false.
+    do ie = 1, branch%n_ele_track
+      select case (where)
+      case ('exit');      s_ele = branch%ele(ie)%s
+      case ('middle');    s_ele = (branch%ele(ie)%s_start + branch%ele(ie)%s) / 2
+      case ('beginning'); s_ele = branch%ele(ie)%s_start
+      end select
+      if (s_ele >= s1 .and. s_ele <= s2) picked_ele(ie) = .true.
+    enddo
+
+  elseif (attrib0 == '*' .or. all_lat) then
+    picked_ele = .true.
+
+  elseif (attrib0 /= '') then
+    call tao_locate_elements (attrib0, u%ix_uni, eles, err, lat_type, &
+                  ignore_blank = .true., above_ubound_is_err = .false., ix_dflt_branch = ix_branch)
+    if (err .or. size(eles) == 0) return
+
+    if (ix_branch /= eles(1)%ele%ix_branch) then
+      ix_branch = eles(1)%ele%ix_branch
+      branch => lat%branch(ix_branch)
+      call re_allocate2 (picked_ele, 0, branch%n_ele_max)
+    endif
+
+    picked_ele = .false.
+    do i = 1, size(eles)
+      if (print_lords == yes$ .and. eles(i)%ele%lord_status == not_a_lord$) cycle
+      picked_ele(eles(i)%ele%ix_ele) = .true.
+    enddo
+
+  elseif (what_to_show == 'rad_int' .or. what_to_show == 'sum_rad_int') then
+    picked_ele = .true.
+
+  else
+    picked_ele = .true.
+    if (count(picked_ele) > 300 .and. print_lords == maybe$) then
+      picked_ele(201:) = .false.
+      limited = .true.
+    endif
+
+  endif
+
   !
 
   tao_lat => tao_pointer_to_tao_lat(u, lat_type)
   lat => tao_lat%lat
-  branch => lat%branch(ix_branch)
   model_branch => u%model_branch(ix_branch)
   tao_branch => u%model%tao_branch(ix_branch)
   design_tao_branch => u%design%tao_branch(ix_branch)
@@ -3162,59 +3226,6 @@ case ('lattice')
       col_info(i)%attrib_type = attribute_type(col_info(i)%attrib_name)
     endif
   enddo
-
-  ! Find elements to use
-
-  if (allocated (picked_ele)) deallocate (picked_ele)
-  allocate (picked_ele(0:branch%n_ele_max))
-
-  if (by_s) then
-    ix_s2 = index(attrib0, ':')
-    if (ix_s2 == 0) then
-      nl=1; lines(1) = 'NO ":" FOUND FOR RANGE SELECTION'
-      return
-    endif
-    read (attrib0(1:ix_s2-1), *, iostat = ios1) s1
-    read (attrib0(ix_s2+1:), *, iostat = ios2) s2
-    if (ios1 /= 0 .or. ios2 /= 0) then
-      nl=1; lines(1) = 'ERROR READING RANGE SELECTION: ' // attrib0
-      return
-    endif
-
-    picked_ele = .false.
-    do ie = 1, branch%n_ele_track
-      select case (where)
-      case ('exit');      s_ele = branch%ele(ie)%s
-      case ('middle');    s_ele = (branch%ele(ie)%s_start + branch%ele(ie)%s) / 2
-      case ('beginning'); s_ele = branch%ele(ie)%s_start
-      end select
-      if (s_ele >= s1 .and. s_ele <= s2) picked_ele(ie) = .true.
-    enddo
-
-  elseif (attrib0 == '*' .or. all_lat) then
-    picked_ele = .true.
-
-  elseif (attrib0 /= '') then
-    call tao_locate_elements (attrib0, u%ix_uni, eles, err, lat_type, &
-                  ignore_blank = .true., above_ubound_is_err = .false., ix_dflt_branch = ix_branch)
-    if (err) return
-    picked_ele = .false.
-    do i = 1, size(eles)
-      if (print_lords == yes$ .and. eles(i)%ele%lord_status == not_a_lord$) cycle
-      picked_ele(eles(i)%ele%ix_ele) = .true.
-    enddo
-
-  elseif (what_to_show == 'rad_int' .or. what_to_show == 'sum_rad_int') then
-    picked_ele = .true.
-
-  else
-    picked_ele = .true.
-    if (count(picked_ele) > 300 .and. print_lords == maybe$) then
-      picked_ele(201:) = .false.
-      limited = .true.
-    endif
-
-  endif
 
   !
 
@@ -4023,16 +4034,16 @@ case ('plot')
 
     nl=nl+1; lines(nl) = ''
     nl=nl+1; lines(nl) = 'Element Shapes:'
-    nl=nl+1; lines(nl) = '                                                                                       Shape   Type    Shape  Multi  Line_'
-    nl=nl+1; lines(nl) = '                  Ele_Name                            Shape           Color             Size  Label     Draw  Shape  Width'
-    nl=nl+1; lines(nl) = '                  ------------------------------      ----------      -------           ----  -------  -----  -----  -----'
+    nl=nl+1; lines(nl) = '                                                                                     Shape  Type    Shape  Multi  Line_'
+    nl=nl+1; lines(nl) = '                  Ele_ID                              Shape           Color           Size  Label    Draw  Shape  Width  Offset'
+    nl=nl+1; lines(nl) = '                  ------------------------------      ----------      -------         ----  ------  -----  -----  -----  ------'
 
     do i = 1, size(shapes)
       shape => shapes(i)
       if (shape%ele_id == '') cycle
-      nl=nl+1; write(lines(nl), '(a, i0, a, t19, a, t55, a, t71, a, t83, f10.1, 2x, a, t103, l5, l6, i7)') &
+      nl=nl+1; write(lines(nl), '(a, i0, a, t19, a, t55, a, t71, a, t83, f8.1, 2x, a, t102, l5, l6, i7, 2x, f8.1)') &
                 'ele_shape(', i, ') = ', quote(shape%ele_id), quote(shape%shape), quote(shape%color), &
-                shape%size, quote(shape%label), shape%draw, shape%multi, shape%line_width
+                shape%size, quote(shape%label), shape%draw, shape%multi, shape%line_width, shape%offset
     enddo
 
     do i = 1, size(s%plot_page%pattern)
@@ -4392,10 +4403,7 @@ case ('spin')
 
   !
 
-  if (.not. bmad_com%spin_tracking_on) then
-    call tao_spin_tracking_turn_on
-    call tao_lattice_calc(ok)
-  endif
+  if (.not. bmad_com%spin_tracking_on) call tao_spin_tracking_turn_on
 
   ! what_to_show = standard
 
@@ -4418,7 +4426,7 @@ case ('spin')
       call tao_spin_polarization_calc (branch, tao_branch, excite_zero, veto)
       nl=nl+1; lines(nl) = ''
       nl=nl+1; write (lines(nl), '(a, es18.7)') 'spin_tune: ', tao_branch%spin%tune / twopi
-      if (tao_branch%spin_valid) then
+      if (tao_branch%spin%valid) then
         if (tao_branch%spin%pol_rate_bks == 0) then
           nl=nl+1; lines(nl) = 'No bends or other radiation producing lattice elements detected!'
         else
@@ -4842,7 +4850,9 @@ case ('taylor_map', 'matrix')
         nl=1; lines(1) = 'CANNOT READ ORDER NUMBER!'
         return
       endif
+
       call string_trim (what2(ix+1:), what2, ix)
+
       if (n_order > ptc_private%taylor_order_ptc) then
         nl=1; write(lines(nl), '(a, i0)') &
                   'TAYLOR ORDER CANNOT BE ABOVE ORDER USED IN CALCULATIONS WHICH IS ', ptc_private%taylor_order_ptc
@@ -4859,6 +4869,7 @@ case ('taylor_map', 'matrix')
       disp_fmt = 'ELEMENTS'
       ele_name = what2(1:ix)
       call string_trim(what2(ix+1:), what2, ix)
+      if (n_order == -1) n_order = 1
 
     case ('-s')
       by_s = .true.
@@ -4930,9 +4941,9 @@ case ('taylor_map', 'matrix')
       ref_vec = orb%vec
     endif
 
-  ! By element
+  !
 
-  else
+  elseif (disp_fmt /= 'ELEMENTS') then
 
     if (ele1_name == '') then
       ix2 = lat%n_ele_track
@@ -5025,32 +5036,33 @@ case ('taylor_map', 'matrix')
 
     !---------------------------------------
 
-    if (disp_fmt /= 'ELEMENTS' .and. ele2_name == '') then
-      nl=nl+1; lines(nl) = 'From: ' // trim(branch%ele(ix1)%name)
-      nl=nl+1; lines(nl) = 'To:   ' // trim(branch%ele(ix2)%name)
-    endif
-
-    if (n_order > 1 .or. print_ptc) then
-      call transfer_map_calc (lat, taylor, err, ix1, ix2, u%model%tao_branch(ix_branch)%orbit(ix1), &
-                                                      one_turn = .true., concat_if_possible = s%global%concatenate_maps)
-      if (err) then
-        nl = 1; lines(1) = 'TAYLOR MAP TERM OVERFLOW.'
-        return
+    if (disp_fmt /= 'ELEMENTS') then
+      if (ele2_name == '') then
+        nl=nl+1; lines(nl) = 'From: ' // trim(branch%ele(ix1)%name)
+        nl=nl+1; lines(nl) = 'To:   ' // trim(branch%ele(ix2)%name)
       endif
 
-      call taylor_to_mat6(taylor, u%model%tao_branch(ix_branch)%orbit(ix1)%vec, vec0, mat6)
-      ref_vec = u%model%tao_branch(ix_branch)%orbit(ix1)%vec
+      if (n_order > 1 .or. print_ptc) then
+        call transfer_map_calc (lat, taylor, err, ix1, ix2, u%model%tao_branch(ix_branch)%orbit(ix1), ix_branch, &
+                                                        one_turn = .true., concat_if_possible = s%global%concatenate_maps)
+        if (err) then
+          nl = 1; lines(1) = 'TAYLOR MAP TERM OVERFLOW.'
+          return
+        endif
 
-    else
-      call transfer_matrix_calc (lat, mat6, vec0, ix1, ix2, ix_branch, one_turn = .true.)
-      ref_vec = u%model%tao_branch(ix_branch)%orbit(ix1)%vec
+        call taylor_to_mat6(taylor, u%model%tao_branch(ix_branch)%orbit(ix1)%vec, vec0, mat6)
+        ref_vec = u%model%tao_branch(ix_branch)%orbit(ix1)%vec
+
+      else
+        call transfer_matrix_calc (lat, mat6, vec0, ix1, ix2, ix_branch, one_turn = .true.)
+        ref_vec = u%model%tao_branch(ix_branch)%orbit(ix1)%vec
+      endif
     endif
 
   endif
 
   ! Print results
 
-  ! 
   if (disp_fmt == 'ELEMENTS') THEN
     call tao_locate_elements (ele_name, u%ix_uni, eles, err)
     if (err .or. size(eles) == 0) return
@@ -5060,31 +5072,45 @@ case ('taylor_map', 'matrix')
       select case (ele%key)
       case (group$, overlay$, girder$, ramper$); cycle
       end select
-
-      mat6 = ele%mat6
-      vec0 = ele%vec0
-
-      if (angle_units) then
-        call mat6_to_taylor (vec0, mat6, taylor, ref_vec)
-        call map_to_angle_coords (taylor, taylor)
-        call taylor_to_mat6 (taylor, ref_vec, vec0, mat6)
+      if (i > 1) then
+        nl=nl+1; lines(nl) = ''
       endif
+      nl=nl+1; write (lines(nl), '(4a)') 'Element: ', trim(ele%name), ' ', ele_loc_name(ele, .false., '()')
+      if (size(lines) < nl+400) call re_allocate(lines, 2*size(lines))
 
-      if (nl+10 > size(lines)) call re_allocate (lines, 2*nl, .false.)
+      if (n_order == 1) then
+        mat6 = ele%mat6
+        vec0 = ele%vec0
 
-      if (fmt /= '') then
-        fmt2 = '(6' // trim(fmt) // ', a, ' // trim(fmt) // ')'
-      elseif (any(abs(mat6(1:n_order,1:n_order)) >= 1000)) then
-        fmt2 = '(6es15.7, a, es15.7)'
-      else
-        fmt2 = '(6f15.8, a, es15.7)'
+        if (angle_units) then
+          call mat6_to_taylor (vec0, mat6, taylor, ref_vec)
+          call map_to_angle_coords (taylor, taylor)
+          call taylor_to_mat6 (taylor, ref_vec, vec0, mat6)
+        endif
+
+        if (nl+10 > size(lines)) call re_allocate (lines, 2*nl, .false.)
+
+        if (fmt /= '') then
+          fmt2 = '(6' // trim(fmt) // ', a, ' // trim(fmt) // ')'
+        elseif (any(abs(mat6(1:n_order,1:n_order)) >= 1000)) then
+          fmt2 = '(6es15.7, a, es15.7)'
+        else
+          fmt2 = '(6f15.8, a, es15.7)'
+        endif
+
+        do j = 1, 6
+          nl=nl+1; write(lines(nl), fmt2, iostat = ios) mat6(j,:), '   : ', vec0(j)
+        enddo
+
+      else  ! n_order /= 1
+        i0 = ele%ix_ele-1
+        call transfer_map_calc (lat, taylor, err, i0, ele%ix_ele, u%model%tao_branch(ix_branch)%orbit(i0), ele%ix_branch) 
+        call truncate_taylor_to_order (taylor, n_order, taylor)
+        call type_taylors (taylor, lines = alloc_lines, n_lines = n, out_style = disp_fmt, clean = .true.)
+        do j = 1, n
+          nl=nl+1; lines(nl) = alloc_lines(j)
+        enddo
       endif
-
-      nl=nl+1; lines(nl) = ''
-      nl=nl+1; write (lines(nl), '(a, f18.9)') ele_full_name(ele), ele%s
-      do j = 1, 6
-        nl=nl+1; write(lines(nl), fmt2, iostat = ios) mat6(j,:), '   : ', vec0(j)
-      enddo
     enddo
 
   else
@@ -5231,6 +5257,7 @@ case ('track')
       lat_type = base$
     case ('-branch')
       branch => pointer_to_branch(what2(1:ix_s2), lat)
+      ix_branch = branch%ix_branch
       if (.not. associated(branch)) then
         nl=1; write(lines(1), *) 'Bad branch index:', ix_branch
         return
@@ -5240,20 +5267,18 @@ case ('track')
       lat_type = design$
     case ('-universe')
       read (what2(1:ix_s2), *, iostat = ios) ix
-      u => tao_pointer_to_universe(ix)
-      if (ix_s2 == 0 .or. ios /= 0 .or. .not. associated(u)) then
+      if (ios /= 0) then
         nl=1; lines(1) = 'CANNOT READ OR OUT-OF RANGE "-universe" argument'
         return
       endif
+      call point_to_this_uni(ix, ix_branch, u, lat, branch, model_branch, tao_branch, design_tao_branch)
+      if (.not. associated(u)) return
       call string_trim(what2(ix_s2+1:), what2, ix_s2)
     end select
   enddo
 
-  tao_lat => tao_pointer_to_tao_lat (u, lat_type)
-  lat => tao_lat%lat
-  branch => lat%branch(branch%ix_branch)
-  ix_branch = branch%ix_branch
-  tao_branch => tao_lat%tao_branch(ix_branch)
+  !
+
   if (ele_name /= '') then
     call tao_locate_elements (ele_name, u%ix_uni, eles, err, lat_type, multiple_eles_is_err = .true.)
     if (err) return
@@ -5640,8 +5665,8 @@ case ('universe')
   if (lat%param%geometry == closed$) then
     u%model%high_e_lat = u%model%lat
     ele2 => u%model%high_e_lat%branch(ix_branch)%ele(0)
-    call emit_6d (ele2, .false., tao_branch%modes_6d, sig_mat)
-    call emit_6d (ele2, .true., tao_branch%modes_6d, sig_mat)
+    call emit_6d (ele2, .false., tao_branch%modes_6d, sig_mat, tao_branch%orbit)
+    call emit_6d (ele2, .true., tao_branch%modes_6d, sig_mat, tao_branch%orbit)
     if (tao_branch%modes_6d%a%j_damp < 0 .or. tao_branch%modes_6d%b%j_damp < 0 .or. &
                                            (tao_branch%modes_6d%z%j_damp < 0 .and. rf_is_on(branch))) then
       call out_io (s_info$, r_name, &
@@ -5787,14 +5812,14 @@ case ('value')
   line = ''
 
   do
-    call tao_next_switch (what2, [character(20):: '#format'], .true., switch, err, ix, print_err = .false.)
+    call tao_next_switch (what2, [character(20):: '#format'], .true., line2, err, ix, print_err = .false.)
     if (err) return
-    select case (switch)
+    select case (line2)
     case ('#format')
       s_fmt = unquote(what2(1:ix))
       call string_trim(what2(ix+1:), what2, ix)
     case default
-      line = trim(line) // trim(switch)
+      line = trim(line) // trim(line2)
       if (what2 == '') exit
     end select
   enddo
@@ -5990,9 +6015,15 @@ case ('variables')
       n = nl + 3*size(v_ptr%slave) + 100
       if (size(lines) < n) call re_allocate(lines, n)
       do i = 1, size(v_ptr%slave)
-        ele => s%u(v_ptr%slave(i)%ix_uni)%model%lat%branch(v_ptr%slave(i)%ix_branch)%ele(v_ptr%slave(i)%ix_ele)
-        nl=nl+1; write(lines(nl), '(2(a, i0), 2a)')  '%slave(', i, '): Slave Element: ', &
+        if (v_ptr%slave(i)%ix_ele < 0) then  ! Happens for particle_start
+          nl=nl+1; write(lines(nl), '(2(a, i0), 2a)')  '%slave(', i, '): Slave Element: ', &
+                                                          v_ptr%slave(i)%ix_uni, '@', 'PARTICLE_START'
+        else
+          ele => s%u(v_ptr%slave(i)%ix_uni)%model%lat%branch(v_ptr%slave(i)%ix_branch)%ele(v_ptr%slave(i)%ix_ele)
+          nl=nl+1; write(lines(nl), '(2(a, i0), 2a)')  '%slave(', i, '): Slave Element: ', &
                                                           v_ptr%slave(i)%ix_uni, '@', ele_full_name(ele)
+        endif
+
         if (associated (v_ptr%slave(i)%model_value)) then
           nl=nl+1; write(lines(nl), irmt)  '%slave(', i, ')%Model_value: ', &
                                                             v_ptr%slave(i)%model_value
@@ -6079,8 +6110,7 @@ case ('variables')
 
 case ('version')
 
-  nl=nl+1; lines(nl) = 'Version: ' // tao_svn_version
-  nl=nl+1; lines(nl) = 'Date: ' // tao_svn_date
+  nl=nl+1; lines(nl) = 'Date: ' // tao_version_date
 
 !----------------------------------------------------------------------
 ! wake_elements
@@ -6333,6 +6363,33 @@ end select
 !----------------------------------------------------------------------
 contains
 
+subroutine point_to_this_uni(ix_uni, ix_branch, u, lat, branch, model_branch, tao_branch, design_tao_branch)
+
+type (tao_universe_struct), pointer :: u
+type (tao_lattice_branch_struct), pointer :: tao_branch, design_tao_branch
+type (lat_struct), pointer :: lat
+type (branch_struct), pointer :: branch
+type (tao_model_branch_struct), pointer :: model_branch
+
+integer ix_uni, ix_branch
+
+!
+
+u => tao_pointer_to_universe(ix_uni)
+if (.not. associated(u)) return
+
+lat => u%model%lat
+branch => lat%branch(ix_branch)
+model_branch => u%model_branch(ix_branch)
+tao_branch => u%model%tao_branch(ix_branch)
+design_tao_branch => u%design%tao_branch(ix_branch)
+
+end subroutine point_to_this_uni
+
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+! contains
+
 subroutine show_ele_data (u, ele, lines, nl)
 
 implicit none
@@ -6404,7 +6461,8 @@ nl=nl+1; write(lines(nl), imt) '  %n_opti_cycles                 = ', s%global%n
 
 nl=nl+1; write(lines(nl), amt) '  %optimizer                     = ', quote(s%global%optimizer)
 nl=nl+1; write(lines(nl), amt) '  %var_out_file                  = ', quote(s%global%var_out_file)
-
+nl=nl+1; write(lines(nl), lmt) '  %opt_match_auto_recalc         = ', s%global%opt_match_auto_recalc
+nl=nl+1; write(lines(nl), lmt) '  %opti_write_var_file           = ', s%global%opti_write_var_file
 nl=nl+1; write(lines(nl), lmt) '  %derivative_recalc             = ', s%global%derivative_recalc
 nl=nl+1; write(lines(nl), lmt) '  %derivative_uses_design        = ', s%global%derivative_uses_design
 nl=nl+1; write(lines(nl), lmt) '  %opt_with_ref                  = ', s%global%opt_with_ref 

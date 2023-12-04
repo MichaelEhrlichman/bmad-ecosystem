@@ -87,6 +87,7 @@ if (bmad_com%auto_bookkeeper) then
   if (ele%bookkeeping_state%attributes /= stale$ .and. .not. logic_option(.false., force_bookkeeping)) return
 
 else
+  call attributes_need_bookkeeping(ele)
   if (ele%bookkeeping_state%attributes /= stale$ .and. .not. logic_option(.false., force_bookkeeping)) return
 
   if (ele%lord_status /= not_a_lord$) then
@@ -361,6 +362,10 @@ if (attribute_index(ele, 'DS_STEP') > 0 .and. val(p0c$) > 0) then  ! If this is 
   if (val(ds_step$) <= 0) then
     if (val(num_steps$) <= 0 .or. abs(val(l$)) == 0) then
       val(ds_step$) = bmad_com%default_ds_step
+      if (ele%key == wiggler$ .or. ele%key == undulator$) call out_io(s_warn$, r_name, &
+                    'Warning! Element: ' // trim(ele%name) // ' which is a ' // key_name(ele%key), &
+                    'is using the bmad_com%default_ds_step since ds_step is not set in the element.', &
+                    'this may be very inaccurate.')
     else
       val(ds_step$) = abs(val(l$)) / val(num_steps$)
     endif
@@ -419,6 +424,18 @@ case (crab_cavity$)
     val(gradient$) = 1d30    ! Something large
   else
     val(gradient$) = val(voltage$) / val(l$)
+  endif
+
+  if (val(e_tot$) /= 0) then
+    beta = ele%value(p0c$) / ele%value(e_tot$)
+    time = branch%param%total_length / (c_light * beta)
+    if (time /= 0) then
+      if (is_true(val(harmon_master$))) then
+        val(rf_frequency$) = val(harmon$) / time
+      else
+        val(harmon$) = val(rf_frequency$) * time
+      endif
+    endif
   endif
 
   if (val(rf_frequency$) /= 0) then
@@ -546,7 +563,7 @@ case (rfcavity$)
     beta = ele%value(p0c$) / ele%value(e_tot$)
     time = branch%param%total_length / (c_light * beta)
     if (time /= 0) then
-      if (ele%value(rf_frequency$) <= 0) then
+      if (is_true(val(harmon_master$))) then
         val(rf_frequency$) = val(harmon$) / time
       else
         val(harmon$) = val(rf_frequency$) * time
@@ -585,7 +602,7 @@ case (rf_bend$)
     beta = ele%value(p0c$) / ele%value(e_tot$)
     time = branch%param%total_length / (c_light * beta)
     if (time /= 0) then
-      if (ele%value(rf_frequency$) <= 0) then
+      if (is_true(val(harmon_master$))) then
         val(rf_frequency$) = val(harmon$) / time
       else
         val(harmon$) = val(rf_frequency$) * time
@@ -814,8 +831,8 @@ endif
 if (associated(ele%rad_map)) ele%rad_map%stale = .true.  ! Forces recalc
 
 if (allocated(ele%multipole_cache)) then
-  ele%multipole_cache%ix_pole_mag_max = invalid$ ! Forces recalc
-  ele%multipole_cache%ix_pole_elec_max = invalid$ ! Forces recalc
+  ele%multipole_cache%mag_valid = .false.
+  ele%multipole_cache%elec_valid = .false.
 endif
 
 ! Set old_value = value

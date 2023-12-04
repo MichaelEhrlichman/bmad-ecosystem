@@ -394,29 +394,31 @@ if (associated(slave%a_pole)) deallocate(slave%a_pole, slave%b_pole)
 if (associated(slave%a_pole_elec)) deallocate(slave%a_pole_elec, slave%b_pole_elec)
 if (allocated(slave%multipole_cache)) deallocate(slave%multipole_cache)
 
-! A match element with match_end$: Restore initial Twiss parameters (which
+! A match element with recalc = True: Restore initial Twiss parameters (which
 ! are calculated in twiss_propagate1).
 
 if (lord%key == match$) then
-  if (is_true(lord%value(match_end$))) then
-    slave%value(beta_a0$)    = slave_val(beta_a0$)
-    slave%value(beta_b0$)    = slave_val(beta_b0$)
-    slave%value(alpha_a0$)   = slave_val(alpha_a0$)
-    slave%value(alpha_b0$)   = slave_val(alpha_b0$)
-    slave%value(eta_x0$)     = slave_val(eta_x0$)
-    slave%value(eta_y0$)     = slave_val(eta_y0$)
-    slave%value(etap_x0$)    = slave_val(etap_x0$)
-    slave%value(etap_y0$)    = slave_val(etap_y0$)
-    slave%value(c11_mat0$:mode_flip1$) = slave_val(c11_mat0$:mode_flip1$)
-  endif
+  if (is_true(lord%value(recalc$))) then
+    if (nint(lord%value(matrix$)) == match_twiss$) then
+      slave%value(beta_a0$)    = slave_val(beta_a0$)
+      slave%value(beta_b0$)    = slave_val(beta_b0$)
+      slave%value(alpha_a0$)   = slave_val(alpha_a0$)
+      slave%value(alpha_b0$)   = slave_val(alpha_b0$)
+      slave%value(eta_x0$)     = slave_val(eta_x0$)
+      slave%value(eta_y0$)     = slave_val(eta_y0$)
+      slave%value(etap_x0$)    = slave_val(etap_x0$)
+      slave%value(etap_y0$)    = slave_val(etap_y0$)
+      slave%value(c11_mat0$:mode_flip1$) = slave_val(c11_mat0$:mode_flip1$)
+    endif
 
-  if (is_true(lord%value(match_end_orbit$))) then
-    slave%value(x0$)  = slave_val(x0$)
-    slave%value(px0$) = slave_val(px0$)
-    slave%value(y0$)  = slave_val(y0$)
-    slave%value(py0$) = slave_val(py0$)
-    slave%value(z0$)  = slave_val(z0$)
-    slave%value(pz0$) = slave_val(pz0$)
+    if (nint(lord%value(kick0$)) == match_orbit$) then
+      slave%value(x0$)  = slave_val(x0$)
+      slave%value(px0$) = slave_val(px0$)
+      slave%value(y0$)  = slave_val(y0$)
+      slave%value(py0$) = slave_val(py0$)
+      slave%value(z0$)  = slave_val(z0$)
+      slave%value(pz0$) = slave_val(pz0$)
+    endif
   endif
 endif
 
@@ -538,7 +540,6 @@ endif
 slave%field_calc = refer_to_lords$
 if (associated(slave%a_pole)) deallocate(slave%a_pole, slave%b_pole)
 if (associated(slave%a_pole_elec)) deallocate(slave%a_pole_elec, slave%b_pole_elec)
-if (allocated(slave%multipole_cache)) deallocate(slave%multipole_cache)
 
 ! Bookkeeping for EM_Field slave is mostly independent of the lords.
 ! Exception: If only one lord then treat em_field slave same as other slaves.
@@ -623,10 +624,8 @@ if (n_major_lords < 2) then
       slave0 => pointer_to_slave(lord, ix_order-1)
       slave%map_ref_orb_in = slave0%map_ref_orb_out
       if (allocated(slave%multipole_cache)) then
-        slave%multipole_cache%ix_pole_mag_max = invalid$
-        slave%multipole_cache%ix_pole_elec_max = invalid$
-        slave%multipole_cache%ix_kick_mag_max = invalid$
-        slave%multipole_cache%ix_kick_elec_max = invalid$
+        slave%multipole_cache%mag_valid = .false.
+        slave%multipole_cache%elec_valid = .false.
       endif
       if (associated(slave%rad_map)) slave%rad_map%stale = .true. ! Forces recalc
     endif
@@ -662,6 +661,8 @@ endif
 !-----------------------------------------------------------------------
 ! Multiple super_lords for this super_slave: 
 ! combine the lord elements.
+
+if (allocated(slave%multipole_cache)) deallocate(slave%multipole_cache)
 
 k_x = 0
 k_y = 0
@@ -737,8 +738,8 @@ do j = 1, slave%n_lord
     if (.not. all(slave%map_ref_orb_in%vec == branch%ele(ix_slave-1)%map_ref_orb_out%vec)) then
       slave%map_ref_orb_in = branch%ele(ix_slave-1)%map_ref_orb_out
       if (allocated(slave%multipole_cache)) then
-        slave%multipole_cache%ix_pole_mag_max = invalid$
-        slave%multipole_cache%ix_pole_elec_max = invalid$
+        slave%multipole_cache%mag_valid = .false.
+        slave%multipole_cache%elec_valid = .false.
       endif
       if (associated(slave%rad_map)) slave%rad_map%stale = .true. ! Forces recalc
     endif
@@ -1278,6 +1279,34 @@ case (lcavity$, rfcavity$, e_gun$)
   value(voltage_tot$) = lord%value(voltage_tot$) * coef
   value(voltage_err$) = lord%value(voltage_err$) * coef
 end select
+
+!
+
+if (allocated(lord%multipole_cache)) then
+  slave%multipole_cache = lord%multipole_cache
+  if (allocated(slave%multipole_cache%a_pole_mag)) then
+    slave%multipole_cache%a_pole_mag = slave%multipole_cache%a_pole_mag * coef
+    slave%multipole_cache%b_pole_mag = slave%multipole_cache%b_pole_mag * coef
+  endif
+
+  if (allocated(slave%multipole_cache%a_kick_mag)) then
+    slave%multipole_cache%a_kick_mag = slave%multipole_cache%a_kick_mag * coef
+    slave%multipole_cache%b_kick_mag = slave%multipole_cache%b_kick_mag * coef
+  endif
+
+  if (allocated(slave%multipole_cache%a_pole_elec)) then
+    slave%multipole_cache%a_pole_elec = slave%multipole_cache%a_pole_elec
+    slave%multipole_cache%b_pole_elec = slave%multipole_cache%b_pole_elec
+  endif
+
+  if (allocated(slave%multipole_cache%a_kick_elec)) then
+    slave%multipole_cache%a_kick_elec = slave%multipole_cache%a_kick_elec
+    slave%multipole_cache%b_kick_elec = slave%multipole_cache%b_kick_elec
+  endif
+
+else
+  if (allocated(slave%multipole_cache)) deallocate(slave%multipole_cache)
+endif
 
 ! s_del is the distance between lord and slave centers
 
@@ -1901,16 +1930,42 @@ if (associated(ele%a_pole_elec)) then
   enddo
 endif
 
+if (associated(ele%cartesian_map)) then
+  do i = 1, size(ele%cartesian_map)
+    ele%value(check_sum$) = ele%value(check_sum$) + ele%cartesian_map(i)%field_scale
+  enddo
+endif
+
+if (associated(ele%cylindrical_map)) then
+  do i = 1, size(ele%cylindrical_map)
+    ele%value(check_sum$) = ele%value(check_sum$) + ele%cylindrical_map(i)%field_scale
+  enddo
+endif
+
+if (associated(ele%gen_grad_map)) then
+  do i = 1, size(ele%gen_grad_map)
+    ele%value(check_sum$) = ele%value(check_sum$) + ele%gen_grad_map(i)%field_scale
+  enddo
+endif
+
+if (associated(ele%grid_field)) then
+  do i = 1, size(ele%grid_field)
+    ele%value(check_sum$) = ele%value(check_sum$) + ele%grid_field(i)%field_scale
+  enddo
+endif
+
 !
 
-dv = abs(ele%value - ele%old_value)
-dv(x1_limit$:y2_limit$) = 0  ! Limit changes do not need bookkeeping
-if (present(dval)) dval = dv
+if (present(dval)) then
+  dv = abs(ele%value - ele%old_value)
+  dv(x1_limit$:y2_limit$) = 0  ! Limit changes do not need bookkeeping
+  dval = dv
 
-if (all(dv == 0) .and. ele%key /= capillary$) then
-  ele%bookkeeping_state%attributes = ok$
-else
-  ele%bookkeeping_state%attributes = stale$
+  if (all(dv == 0) .and. ele%key /= capillary$) then
+    ele%bookkeeping_state%attributes = ok$
+  else
+    ele%bookkeeping_state%attributes = stale$
+  endif
 endif
 
 end subroutine attributes_need_bookkeeping
