@@ -117,6 +117,12 @@ at the loss location.
 The output of the {\tt touschek_background} program is the current and power of lost particles deposited
 at each element in the lattice.
 
+This simulation was originally developed to determine the best locations for collimators to 
+intercept Touschek particles and control where losses occur.  To that end, particles lost to a collimator
+are treated differently than particles lost elsewhere
+
+Results from this simulation have been included in Refs.~\cite{mpe:coll}, \cite{mpe:esp}, \cite{mpe:thesis}.
+
 \section{Input Parameters}
 The input parameters are:
 \begin{example}
@@ -126,25 +132,23 @@ The input parameters are:
 
 	! Set region where particles are to be generated.
 	! Can be set by location s or by element names.
-  ! start_stop_type = 1 !1=by s, 2=by element name
+  start_stop_type = 2 !1=by s, 2=by element name
+  ! If "by s", then populate the s_prod_* and s_lost_* parameters.
+  ! If "by element name", then populate the name_prod_* and 
+  ! name_lost_* parameters
+
   ! s_prod_start = 839.2
   ! s_prod_end = 839.3  !a negative number here means lat%param%total_length
+  name_prod_start = 'sa.mar.beg'
+  name_prod_end   = 'sa.mar.end'
 
 	! Set region where particles losses are to be recorded.
 	! Losses before s_lost_start are ignored.
 	! Particles are not tracked beyond s_lost_end.
   ! s_lost_start = 0.
   ! s_lost_end = 1219.6  !a negative number here means lat%param%total_length
-
-  start_stop_type = 2
-  name_prod_start = 'sa.mar.beg'
-  name_prod_end   = 'sa.mar.end'
   name_lost_start = 'sa.mar.beg'
   name_lost_end   = 'sa.mar.end'
-  !name_lost_start = 'sa.celle.mar.beg'
-  !name_lost_end   = 'sa.celle.mar.end'
-  !name_lost_start = 'sa.celld07.mar.beg'
-  !name_lost_end   = 'sa.celld07.mar.end'
 
   do_ibs = .false. !If true, then IBS will be taken into account when
                    !calculating the beam emittances and energy spread.
@@ -198,6 +202,25 @@ The Bmad web site:
 Piwinski, A., ``The Touschek effect in strong focusing storage rings''.
 https://arxiv.org/abs/physics/9903034
 DESY 98-179.  1999.
+
+\bibitem{mpe:coll}
+Ehrlichman, M., Hoffstaetter, G.,
+``Collimating Touschek Particles in an Energy Recovery Linear Accelerator''.
+https://inspirehep.net/literature/1379047
+PAC'09, Vancouver, Canada, 2009.
+
+\bibitem{mpe:esp}
+Hoffstaetter, G., Ehrlichman, M., Temnykh, A.
+``Intra Beam Scattering in Linear Accelerators, Especially ERLs''.
+https://accelconf.web.cern.ch/e08/papers/tupp040.pdf
+EPAC'08, Genoa, Italy, 2008.
+
+\bibitem{mpe:thesis}
+Ehrlichman M.
+``Normal Mode Analysis of Single Bunch, Charge Density Dependent Behavior in 
+Electron/Positron Beams''.
+https://www.classe.cornell.edu/~ehrlichm/Ehrlichman-Thesis-revised.pdf
+Cornell University Graduate Thesis, Ithaca, New York, 2013.
 
 \end{thebibliography}
 \end{document}  
