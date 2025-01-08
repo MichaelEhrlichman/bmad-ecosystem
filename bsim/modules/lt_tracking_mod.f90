@@ -1240,7 +1240,7 @@ do ii = 1, branch%n_ele_track
   call ltt_extraction_write(lttp, ltt_com, beam, ele, eles(1:n_loc), ele%s - fork%s)
   ele => pointer_to_next_ele(ele, skip_beginning = .true.)
   if (ele%key == fork$) exit
-  call track1_bunch(bunch, ele, err)
+  call track1_beam(beam, ele, err)
 enddo
 
 if (ii > branch%n_ele_track) then
@@ -1264,7 +1264,7 @@ fork_loop: do   ! Loop in case extraction branch forks at the end to yet another
     ele => pointer_to_next_ele(ele)
     if (ele%key == fork$ .and. (ele%ix_ele == nt .or. &
                 (ele%ix_ele == nt-1 .and. branch%ele(nt)%key == marker$))) cycle fork_loop  ! Fork to new branch
-    call track1_bunch(bunch, ele, err)
+    call track1_beam(beam, ele, err)
     s_pos = s_pos + ele%value(l$)
   enddo
 enddo fork_loop
@@ -3507,11 +3507,10 @@ character(*), parameter :: r_name = 'ltt_track1_preprocess'
 ! This routine may be called by bmad_parser (via ele_compute_ref_energy_and_time) which is 
 ! before LTT ramping has been setup. To avoid problems, return if setup has not been done.
 
+err_flag = .false.
 if (.not. associated(ltt_com_global%tracking_lat%ele)) return
 
 ! Recording a particle track?
-
-err_flag = .false.
 
 if (start_orb%ix_user > 0 .and. start_orb%state == alive$) then
   iu = lunget()

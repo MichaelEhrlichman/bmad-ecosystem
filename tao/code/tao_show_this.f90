@@ -168,13 +168,13 @@ character(16) spin_fmt, t_fmt, twiss_fmt, disp_fmt, str1, str2, where
 character(24) show_name, show2_name, what_to_show
 character(24) :: var_name, blank_str = '', phase_units_str, val_str
 character(24) :: plane, imt, imt2, lmt, lmt2, amt, iamt, ramt, f3mt, rmt, rmt2, rmt3, irmt, iimt
-character(40) ele_name, sub_name, ele1_name, ele2_name, ele_ref_name, b_name, param_name, uni_str
+character(40) ele_name, ele1_name, ele2_name, ele_ref_name, b_name, param_name, uni_str
 character(40) replacement_for_blank, component, s_fmt
-character(60) aname, myname, attrib
+character(60) aname, myname
 character(100) :: word1, word2, fmt, fmt2, fmt3, switch, why_invalid
 character(200) header, str, attrib0, file_name, name, excite_zero(3), veto
 character(200), allocatable :: alloc_lines(:)
-character(400) attrib_list(20)
+character(400) attrib_list(20), attrib, sub_name
 
 character(2), parameter :: q_name(0:3) = ['q0', 'qx', 'qy', 'qz']
 character(1), parameter :: abc_name(1:3) = ['A', 'B', 'C']
@@ -293,7 +293,7 @@ case ('beam')
   zb = -1
 
   do 
-    call tao_next_switch (what2, [character(16):: '-universe'], .true., switch, err)
+    call tao_next_switch (what2, [character(16):: '-universe', '-lattice', '-comb', '-z'], .true., switch, err)
     if (err) return
     if (switch == '') exit
 
@@ -357,7 +357,7 @@ case ('beam')
     return
   endif
 
-  if (what_to_show == '-comb' .and. ele_name == '') then
+  if (what_to_show == '-comb' .and. ele_name == '') then   ! -comb used without comb index.
     if (.not. allocated(tao_branch%bunch_params_comb)) then
       nl=nl+1; lines(nl) = 'Beam parameter comb not calculated (check comb_ds_save)' 
       return
@@ -445,6 +445,9 @@ case ('beam')
     nl=nl+1; write(lines(nl), amt)  'dump_at           = ', quote(u%beam%dump_at)
     nl=nl+1; write(lines(nl), amt)  'dump_file         = ', quote(u%beam%dump_file)
     nl=nl+1; write(lines(nl), rmt3) 'comb_ds_save      = ', tao_branch%comb_ds_save, '  ! Note: -1 => Use (latice branch length)/plot_page%n_curve_pts'
+    if (allocated(tao_branch%bunch_params_comb)) then
+      nl=nl+1; write(lines(nl), amt)  'comb index range  = [0, ', int_str(tao_branch%bunch_params_comb(1)%n_pt), ']'
+    endif
 !!!!    nl=nl+1; write(lines(nl), rmt) 'comb_max_ds_save  = ', tao_branch%bunch_params_comb(1)%max_ds_save
     nl=nl+1; write(lines(nl), amt)  'track_start       = ', quote(bb%track_start), '  ! ', ele_full_name(branch%ele(bb%ix_track_start))
     nl=nl+1; write(lines(nl), amt)  'track_end         = ', quote(bb%track_end),   '  ! ', ele_full_name(branch%ele(bb%ix_track_end))
@@ -2135,7 +2138,7 @@ case ('global')
     nl=nl+1; write(lines(nl), lmt) '  %opti_write_var_file           = ', s%global%opti_write_var_file
     nl=nl+1; write(lines(nl), lmt) '  %optimizer_var_limit_warn      = ', s%global%optimizer_var_limit_warn
     nl=nl+1; write(lines(nl), amt) '  %phase_units                   = ', angle_units_name(s%global%phase_units)
-    nl=nl+1; write(lines(nl), lmt) '  %rad_int_calc_on               = ', s%global%rad_int_calc_on
+    nl=nl+1; write(lines(nl), lmt) '  %rad_int_calc_on               = ', s%global%rad_int_user_calc_on
     nl=nl+1; write(lines(nl), amt) '  %history_file                  = ', s%global%history_file
     nl=nl+1; write(lines(nl), lmt) '  %plot_on                       = ', s%global%plot_on
     nl=nl+1; write(lines(nl), lmt) '  %external_plotting             = ', s%global%external_plotting
@@ -2407,8 +2410,14 @@ case ('graph')
   nl=nl+1; write(lines(nl), rmt)  'symbol_size_scale                = ', g%symbol_size_scale
   nl=nl+1; write(lines(nl), amt)  'text_legend_origin%x,y,units     = ', real_str(g%text_legend_origin%x, 3), ', ', &
                                                        real_str(g%text_legend_origin%y, 3), ', ', quote(g%text_legend_origin%units)
-  nl=nl+1; write(lines(nl), amt)  'curve_legend_origin%x,y,units     = ', real_str(g%curve_legend_origin%x, 3), ', ', &
+  nl=nl+1; write(lines(nl), amt)  'curve_legend_origin%x,y,units    = ', real_str(g%curve_legend_origin%x, 3), ', ', &
                                                        real_str(g%curve_legend_origin%y, 3), ', ', quote(g%curve_legend_origin%units)
+  nl=nl+1; write(lines(nl), f3mt) 'curve_legend%line_length         = ', g%curve_legend%line_length
+  nl=nl+1; write(lines(nl), f3mt) 'curve_legend%text_offset         = ', g%curve_legend%text_offset
+  nl=nl+1; write(lines(nl), f3mt) 'curve_legend%row_spacing         = ', g%curve_legend%row_spacing
+  nl=nl+1; write(lines(nl), lmt)  'curve_legend%draw_line           = ', g%curve_legend%draw_line
+  nl=nl+1; write(lines(nl), lmt)  'curve_legend%draw_symbol         = ', g%curve_legend%draw_symbol
+  nl=nl+1; write(lines(nl), lmt)  'curve_legend%draw_text           = ', g%curve_legend%draw_text
 
   if (g%type == 'floor_plan') then
     nl=nl+1; write(lines(nl), amt)  'floor_plan%view                  = ', quote(g%floor_plan%view)
@@ -2746,11 +2755,11 @@ case ('lattice')
   do
     call tao_next_switch (what2, [character(32):: &
         '-branch', '-blank_replacement', '-lords', '-center', '-middle', &
-        '-tracking_elements', '-0undef', '-beginning', 'pipe', &
+        '-tracking_elements', '-0undef', '-beginning', '-pipe', &
         '-no_label_lines', '-no_tail_lines', '-custom', '-s', '-radiation_integrals', '-remove_line_if_zero', &
         '-base', '-design', '-floor_coords', '-orbit', '-attribute', '-all', '-no_slaves', '-energy', &
-        '-spin', '-undef0', '-no_super_slaves', '-sum_radiation_integrals', '-python', '-universe', '-rms'], &
-            .true., switch, err)
+        '-spin', '-undef0', '-no_super_slaves', '-sum_radiation_integrals', '-python', '-universe', '-rms', &
+        '-6d_radiation_integrals', '-ri_radiation_integrals'], .true., switch, err)
     if (err) return
     if (switch == '') exit
     select case (switch)
@@ -2866,6 +2875,14 @@ case ('lattice')
       what_to_show = 'rad_int'
       all_lat = .true.  ! Will only print where radiation integrals is non-zero
 
+    case ('-6d_radiation_integrals')
+      what_to_show = '6d_rad_int'
+      all_lat = .true.  ! Will only print where radiation integrals is non-zero
+
+    case ('-ri_radiation_integrals')
+      what_to_show = 'ri_rad_int'
+      all_lat = .true.  ! Will only print where radiation integrals is non-zero
+
     case ('-rms')
       print_rms = .true.
 
@@ -2963,7 +2980,7 @@ case ('lattice')
       picked_ele(eles(i)%ele%ix_ele) = .true.
     enddo
 
-  elseif (what_to_show == 'rad_int' .or. what_to_show == 'sum_rad_int') then
+  elseif (index(what_to_show, 'rad_int') /= 0) then
     picked_ele = .true.
 
   else
@@ -3115,32 +3132,63 @@ case ('lattice')
       col(12)  = setup_lat_column('ele::#[spin_dn_dpz.amp]',  'es14.6', '', .false., 1.0_rp)
     endif
 
-  case ('rad_int')
+  case ('6d_rad_int')
     col(1)  = setup_lat_column('#',                     'i7',       '', .false., 1.0_rp)
     col(2)  = setup_lat_column('x',                     '2x',       '', .false., 1.0_rp)
     col(3)  = setup_lat_column('ele::#[name]',          'a0',       '', .false., 1.0_rp)
     col(4)  = setup_lat_column('ele::#[key]',           'a17',      '', .false., 1.0_rp)
     col(5)  = setup_lat_column('ele::#[s]',             'f10.3',    '', .false., 1.0_rp)
     if (branch%param%geometry == open$) then
-      col(6)  = setup_lat_column('lat::rad_int1.i0[#]',     'es10.2',  '', .true., 1.0_rp)
-      col(7)  = setup_lat_column('lat::rad_int1.i1[#]',     'es10.2',  '', .true., 1.0_rp)
-      col(8)  = setup_lat_column('lat::rad_int1.i2_e4[#]',  'es10.2',  '', .false., 1.0_rp)
-      col(9)  = setup_lat_column('lat::rad_int1.i3_e7[#]',  'es10.2',  '', .false., 1.0_rp)
-      col(10) = setup_lat_column('lat::rad_int1.i5a_e6[#]', 'es10.2',  '', .false., 1.0_rp)
-      col(11) = setup_lat_column('lat::rad_int1.i5b_e6[#]', 'es10.2',  '', .false., 1.0_rp)
+      col(6)  = setup_lat_column('lat::rad_int1_6d.i0[#]',     'es10.2',  '', .true., 1.0_rp)
+      col(7)  = setup_lat_column('lat::rad_int1_6d.i1[#]',     'es10.2',  '', .true., 1.0_rp)
+      col(8)  = setup_lat_column('lat::rad_int1_6d.i2_e4[#]',  'es10.2',  '', .false., 1.0_rp)
+      col(9)  = setup_lat_column('lat::rad_int1_6d.i3_e7[#]',  'es10.2',  '', .false., 1.0_rp)
+      col(10) = setup_lat_column('lat::rad_int1_6d.i5a_e6[#]', 'es10.2',  '', .false., 1.0_rp)
+      col(11) = setup_lat_column('lat::rad_int1_6d.i5b_e6[#]', 'es10.2',  '', .false., 1.0_rp)
+      col(12) = setup_lat_column('lat::emit.a[#]',         'es10.2',  '', .false., 1.0_rp)
+      col(13) = setup_lat_column('lat::emit.b[#]',         'es10.2',  '', .false., 1.0_rp)
+      col(14) = setup_lat_column('lat::sigma.pz[#]',       'es10.2',  '', .false., 1.0_rp)
     else
-      col(6)  = setup_lat_column('lat::rad_int1.i0[#]',     'es10.2',  '', .true., 1.0_rp)
-      col(7)  = setup_lat_column('lat::rad_int1.i1[#]',     'es10.2',  '', .true., 1.0_rp)
-      col(8)  = setup_lat_column('lat::rad_int1.i2[#]',     'es10.2',  '', .false., 1.0_rp)
-      col(9)  = setup_lat_column('lat::rad_int1.i3[#]',     'es10.2',  '', .false., 1.0_rp)
-      col(10) = setup_lat_column('lat::rad_int1.i4a[#]',    'es10.2',  '', .false., 1.0_rp)
-      col(11) = setup_lat_column('lat::rad_int1.i5a[#]',    'es10.2',  '', .false., 1.0_rp)
-      col(12) = setup_lat_column('lat::rad_int1.i4b[#]',    'es10.2',  '', .false., 1.0_rp)
-      col(13) = setup_lat_column('lat::rad_int1.i5b[#]',    'es10.2',  '', .false., 1.0_rp)
-      col(14) = setup_lat_column('lat::rad_int1.i6b[#]',    'es10.2',  '', .false., 1.0_rp)
+      col(6)  = setup_lat_column('lat::rad_int1_6d.i0[#]',     'es10.2',  '', .true., 1.0_rp)
+      col(7)  = setup_lat_column('lat::rad_int1_6d.i1[#]',     'es10.2',  '', .true., 1.0_rp)
+      col(8)  = setup_lat_column('lat::rad_int1_6d.i2[#]',     'es10.2',  '', .false., 1.0_rp)
+      col(9)  = setup_lat_column('lat::rad_int1_6d.i3[#]',     'es10.2',  '', .false., 1.0_rp)
+      col(10) = setup_lat_column('lat::rad_int1_6d.i4a[#]',    'es10.2',  '', .false., 1.0_rp)
+      col(11) = setup_lat_column('lat::rad_int1_6d.i5a[#]',    'es10.2',  '', .false., 1.0_rp)
+      col(12) = setup_lat_column('lat::rad_int1_6d.i4b[#]',    'es10.2',  '', .false., 1.0_rp)
+      col(13) = setup_lat_column('lat::rad_int1_6d.i5b[#]',    'es10.2',  '', .false., 1.0_rp)
+      col(14) = setup_lat_column('lat::rad_int1_6d.i6b[#]',    'es10.2',  '', .false., 1.0_rp)
     endif
 
-  case ('sum_rad_int')
+  case ('ri_rad_int')
+    col(1)  = setup_lat_column('#',                     'i7',       '', .false., 1.0_rp)
+    col(2)  = setup_lat_column('x',                     '2x',       '', .false., 1.0_rp)
+    col(3)  = setup_lat_column('ele::#[name]',          'a0',       '', .false., 1.0_rp)
+    col(4)  = setup_lat_column('ele::#[key]',           'a17',      '', .false., 1.0_rp)
+    col(5)  = setup_lat_column('ele::#[s]',             'f10.3',    '', .false., 1.0_rp)
+    if (branch%param%geometry == open$) then
+      col(6)  = setup_lat_column('lat::rad_int1_ri.i0[#]',     'es10.2',  '', .true., 1.0_rp)
+      col(7)  = setup_lat_column('lat::rad_int1_ri.i1[#]',     'es10.2',  '', .true., 1.0_rp)
+      col(8)  = setup_lat_column('lat::rad_int1_ri.i2_e4[#]',  'es10.2',  '', .false., 1.0_rp)
+      col(9)  = setup_lat_column('lat::rad_int1_ri.i3_e7[#]',  'es10.2',  '', .false., 1.0_rp)
+      col(10) = setup_lat_column('lat::rad_int1_ri.i5a_e6[#]', 'es10.2',  '', .false., 1.0_rp)
+      col(11) = setup_lat_column('lat::rad_int1_ri.i5b_e6[#]', 'es10.2',  '', .false., 1.0_rp)
+      col(12) = setup_lat_column('lat::emit.a[#]',         'es10.2',  '', .false., 1.0_rp)
+      col(13) = setup_lat_column('lat::emit.b[#]',         'es10.2',  '', .false., 1.0_rp)
+      col(14) = setup_lat_column('lat::sigma.pz[#]',       'es10.2',  '', .false., 1.0_rp)
+    else
+      col(6)  = setup_lat_column('lat::rad_int1_ri.i0[#]',     'es10.2',  '', .true., 1.0_rp)
+      col(7)  = setup_lat_column('lat::rad_int1_ri.i1[#]',     'es10.2',  '', .true., 1.0_rp)
+      col(8)  = setup_lat_column('lat::rad_int1_ri.i2[#]',     'es10.2',  '', .false., 1.0_rp)
+      col(9)  = setup_lat_column('lat::rad_int1_ri.i3[#]',     'es10.2',  '', .false., 1.0_rp)
+      col(10) = setup_lat_column('lat::rad_int1_ri.i4a[#]',    'es10.2',  '', .false., 1.0_rp)
+      col(11) = setup_lat_column('lat::rad_int1_ri.i5a[#]',    'es10.2',  '', .false., 1.0_rp)
+      col(12) = setup_lat_column('lat::rad_int1_ri.i4b[#]',    'es10.2',  '', .false., 1.0_rp)
+      col(13) = setup_lat_column('lat::rad_int1_ri.i5b[#]',    'es10.2',  '', .false., 1.0_rp)
+      col(14) = setup_lat_column('lat::rad_int1_ri.i6b[#]',    'es10.2',  '', .false., 1.0_rp)
+    endif
+
+  case ('rad_int', 'sum_rad_int')
     col(1)  = setup_lat_column('#',                     'i7',       '', .false., 1.0_rp)
     col(2)  = setup_lat_column('x',                     '2x',       '', .false., 1.0_rp)
     col(3)  = setup_lat_column('ele::#[name]',          'a0',       '', .false., 1.0_rp)
@@ -3231,11 +3279,11 @@ case ('lattice')
   do i = 1, size(column)
     if (index(col(i)%name, 'rad_int') /= 0) then
       ix = ix_branch
-      call radiation_integrals (u%model%lat, tao_branch%orbit, tao_branch%modes_ri, tao_branch%ix_rad_int_cache, ix, u%model%rad_int)
+      call radiation_integrals (u%model%lat, tao_branch%orbit, tao_branch%modes_ri, tao_branch%ix_rad_int_cache, ix, u%model%rad_int_by_ele_ri)
       call radiation_integrals (u%design%lat, design_tao_branch%orbit, design_tao_branch%modes_ri, &
-                                                            design_tao_branch%ix_rad_int_cache, ix, u%design%rad_int)
+                                                            design_tao_branch%ix_rad_int_cache, ix, u%design%rad_int_by_ele_ri)
       call radiation_integrals (u%base%lat, u%base%tao_branch(ix)%orbit, u%base%tao_branch(ix)%modes_ri, &
-                                                  u%base%tao_branch(ix)%ix_rad_int_cache, ix, u%base%rad_int)
+                                                  u%base%tao_branch(ix)%ix_rad_int_cache, ix, u%base%rad_int_by_ele_ri)
       exit
     endif
   enddo
@@ -4130,12 +4178,6 @@ case ('plot')
     nl=nl+1; write(lines(nl), f3mt) '  %lat_layout_text_scale         = ', s%plot_page%lat_layout_text_scale 
     nl=nl+1; write(lines(nl), lmt)  '  %delete_overlapping_plots      = ', s%plot_page%delete_overlapping_plots
     nl=nl+1; write(lines(nl), lmt)  '  %draw_graph_title_suffix       = ', s%plot_page%draw_graph_title_suffix
-    nl=nl+1; write(lines(nl), f3mt) '  %curve_legend%line_length      = ', s%plot_page%curve_legend%line_length
-    nl=nl+1; write(lines(nl), f3mt) '  %curve_legend%text_offset      = ', s%plot_page%curve_legend%text_offset
-    nl=nl+1; write(lines(nl), f3mt) '  %curve_legend%row_spacing      = ', s%plot_page%curve_legend%row_spacing
-    nl=nl+1; write(lines(nl), lmt)  '  %curve_legend%draw_line        = ', s%plot_page%curve_legend%draw_line
-    nl=nl+1; write(lines(nl), lmt)  '  %curve_legend%draw_symbol      = ', s%plot_page%curve_legend%draw_symbol
-    nl=nl+1; write(lines(nl), lmt)  '  %curve_legend%draw_text        = ', s%plot_page%curve_legend%draw_text
 
 
     result_id = 'plot:global'
@@ -4587,7 +4629,6 @@ case ('spin')
     else
       tao_branch%spin_map_valid = .false.
       call tao_spin_polarization_calc (branch, tao_branch, excite_zero, veto)
-      if (.not. u%calc%one_turn_map) call tao_ptc_normal_form (.true., u%model, branch%ix_branch)
 
       !
 
@@ -5751,6 +5792,7 @@ case ('universe')
   branch => lat%branch(ix_branch)
   model_branch => u%model_branch(ix_branch)
   tao_branch => u%model%tao_branch(ix_branch)
+  tao_lat => tao_pointer_to_tao_lat (u, model$)
 
   design_lat => u%design%lat
   design_branch => design_lat%branch(ix_branch)
@@ -5844,8 +5886,8 @@ case ('universe')
   if (lat%param%geometry == closed$) then
     u%model%high_e_lat = u%model%lat
     ele2 => u%model%high_e_lat%branch(ix_branch)%ele(0)
-    call emit_6d (ele2, .false., tao_branch%modes_6d, sig_mat, tao_branch%orbit)
-    call emit_6d (ele2, .true., tao_branch%modes_6d, sig_mat, tao_branch%orbit)
+    call emit_6d (ele2, .false., tao_branch%modes_6d, sig_mat, tao_branch%orbit, tao_lat%rad_int_by_ele_6d)
+    call emit_6d (ele2, .true., tao_branch%modes_6d, sig_mat, tao_branch%orbit, tao_lat%rad_int_by_ele_6d)
     if (tao_branch%modes_6d%a%j_damp < 0 .or. tao_branch%modes_6d%b%j_damp < 0 .or. &
                                            (tao_branch%modes_6d%z%j_damp < 0 .and. rf_is_on(branch))) then
       call out_io (s_info$, r_name, &

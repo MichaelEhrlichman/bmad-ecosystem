@@ -6314,7 +6314,7 @@ case ('ring_general')
                                                   pz = tao_branch%orbit(0)%vec(6), ix_branch = branch%ix_branch)
   call calc_z_tune(branch)
   call radiation_integrals (branch%lat, tao_branch%orbit, tao_branch%modes_ri, tao_branch%ix_rad_int_cache, branch%ix_branch)
-  call emit_6d(branch%ele(0), .true., tao_branch%modes_6d, mat6, tao_branch%orbit)
+  call emit_6d(branch%ele(0), .true., tao_branch%modes_6d, mat6, tao_branch%orbit, tao_lat%rad_int_by_ele_6d)
   n = branch%n_ele_track
   time1 = branch%ele(n)%ref_time
   gamma = branch%ele(0)%value(e_tot$) / mass_of(branch%param%particle)
@@ -6811,7 +6811,7 @@ case ('space_charge_com')
 
   nl=incr(nl); write(li(nl), lmt) 'lsc_kick_transverse_dependence;LOGIC;T;',  space_charge_com%lsc_kick_transverse_dependence
 
-  nl=incr(nl); write(li(nl), amt) 'diagnostic_output_file;STR;T;',            quote(space_charge_com%diagnostic_output_file)
+  nl=incr(nl); write(li(nl), amt) 'diagnostic_output_file;STR;T;',            trim(space_charge_com%diagnostic_output_file)
 
 !------------------------------------------------------------------------------------------------
 !------------------------------------------------------------------------------------------------
@@ -7062,7 +7062,7 @@ case ('spin_polarization')
   tao_branch => tao_lat%tao_branch(ix_branch)
   branch => tao_lat%lat%branch(ix_branch)
 
-  if (.not. tao_branch%spin%valid) call tao_spin_polarization_calc (branch, tao_branch)
+  call tao_spin_polarization_calc (branch, tao_branch)
 
   z = anomalous_moment_of(branch%param%particle) * branch%ele(0)%value(e_tot$) / mass_of(branch%param%particle)
   nl=incr(nl); write (li(nl), rmt) 'anom_moment_times_gamma;REAL;F;',           z
