@@ -1,0 +1,55 @@
+period = 48
+l_EBEND = 12.5
+l_QUAD = 0.4
+l_DRIFT = 1.88
+G = anom_moment_proton
+gamma_magic = sqrt(1+1/G)
+beta_magic = sqrt(1-(1/gamma_magic)^2)
+momentum_magic = gamma_magic*beta_magic*m_proton
+bend_angle = twopi/period
+r_bend = l_EBEND / bend_angle
+parameter[geometry]                 =   closed
+parameter[particle]                 =   proton
+parameter[absolute_time_tracking]   =   .false.
+beginning[p0c]                      =   momentum_magic
+bmad_com[spin_tracking_on]          =   T
+particle_start[x] = 0.0
+particle_start[px] = 0.0
+particle_start[y] = 0.0
+particle_start[py] = 0.0
+particle_start[z] = 0.0
+particle_start[pz] = 0.0
+particle_start[spin_x] = 0.0
+particle_start[spin_y] = 0.0
+particle_start[spin_z] = 1.0
+M: Marker
+EBEND: sbend
+EBEND[fringe_type] = hard_edge_only
+!EBEND[fringe_type] = basic_bend
+EBEND[l] = l_EBEND
+EBEND[b_field] = momentum_magic/(c_light*r_bend)         ! magnetic field in T
+EBEND[b_field_err] = -momentum_magic/(c_light*r_bend)    ! magnetic field in T
+EBEND[b0_elec] = -beta_magic*momentum_magic/r_bend       ! electric field in V/m
+EBEND[r0_elec] = 0.04                                    ! electrostatic deflector gap 4cm
+EBEND[exact_multipoles] = vertically_pure
+EBEND[tracking_method] = runge_kutta
+EBEND[mat6_calc_method] = tracking
+Dr:  drift
+Dr[L] = l_DRIFT
+QF: quadrupole
+QF[L] = l_QUAD
+QF[b1_gradient] = 0.204889
+QD: quadrupole
+QD[L] = l_QUAD
+QD[b1_gradient] = -0.204889
+sector: line = (Dr, QF, Dr, EBEND, Dr, QD, Dr, EBEND)
+!ring: line = (M, 24*sector, M)
+ring: line = (M, 24*sector, M)
+![num_steps]=30
+*[tracking_method]              =       runge_kutta
+![mat6_calc_method]             =       Bmad_Standard
+![spin_tracking_method]         =       tracking
+bmad_com[rel_tol_tracking] = 1e-14
+bmad_com[abs_tol_tracking] = 1e-14
+bmad_com[default_ds_step] = 0.001
+use, ring

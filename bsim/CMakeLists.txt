@@ -27,6 +27,7 @@ set (EXE_SPECS
   cmake_files/cmake.dynamic_aperture
   cmake_files/cmake.ibs_linac
   cmake_files/cmake.ibs_ring
+  cmake_files/cmake.ibs_proton_ring
   cmake_files/cmake.sodom2
   cmake_files/cmake.spin_stroboscope
   cmake_files/cmake.synrad

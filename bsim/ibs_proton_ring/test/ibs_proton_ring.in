@@ -1,0 +1,13 @@
+&ibs_params
+  lat_name = 'pEDM.lat'
+  ibs_formula = 'mpxx'
+
+  Npart = 1.64e8
+
+  emit_x = 214.0e-9
+  emit_y = 250.0e-9
+  sig_z = 0.994
+  sig_p = 1.177e-4
+
+  granularity = -1
+/
