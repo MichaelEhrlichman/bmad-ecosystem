@@ -2196,7 +2196,7 @@ type (coord_struct), pointer :: orb(:), orb_ref
 type (coord_struct) orbit_end, orbit_last, orbit
 type (lat_struct), pointer :: lat
 type (ele_struct), target :: ele
-type (ele_struct), pointer :: ele_here, ele_ref, this_ele
+type (ele_struct), pointer :: ele_last, ele_here, ele_ref, this_ele
 type (taylor_struct) t_map(6)
 type (branch_struct), pointer :: branch
 type (all_pointer_struct) a_ptr
@@ -2306,6 +2306,8 @@ end select
 
 !
 
+ele_last => branch%ele(0)
+
 do ii = 1, size(curve%x_line)
 
   ! Good(ii) may be false if this is not first time tao_calc_data_at_s_pts is called from tao_curve_data_setup.
@@ -2328,7 +2330,8 @@ do ii = 1, size(curve%x_line)
   ix_ele_here = element_at_s (lat, s_now, .true., ix_branch, err_flag)
   ele_here => branch%ele(ix_ele_here)
 
-  if (ele_here%key == hybrid$ .or. ele_here%key == taylor$ .or. err_flag) then
+  if (ele_here%key == hybrid$ .or. ele_here%key == taylor$ .or. err_flag .or. &
+      ele_last%key == hybrid$ .or. ele_last%key == taylor$) then
     if (err_flag .or. s_last == ele_here%s) then
       good(ii) = .false.
       first_time = .true.
@@ -2347,6 +2350,7 @@ do ii = 1, size(curve%x_line)
   endif
 
   curve%x_line(ii) = s_now
+  ele_last => ele_here
 
   if (ii > 1 .and. s_now <= s_last) then
     good(ii) = .false.
@@ -2439,25 +2443,31 @@ do ii = 1, size(curve%x_line)
       err_flag  = tao_branch%plot_cache(ii)%err
 
     else
+      ! Note: first_time may be set True when a Taylor or Hybrid element is encountered.
       if (first_time) then
         call twiss_and_track_at_s (lat, s_now, ele, orb, orbit, ix_branch, err_flag, compute_floor_coords = .true.)
-        call mat6_from_s_to_s (lat, mat6, vec0, branch%ele(0)%s, x1, orb(0), ix_branch = ix_branch)
+        call mat6_from_s_to_s (lat, mat6, vec0, branch%ele(0)%s, s_now, orb(0), ix_branch = ix_branch)
+        ele%vec0 = vec0
+        ele%mat6 = mat6
         orbit_end = orbit
         first_time = .false.
 
       else
-        call twiss_and_track_from_s_to_s (branch, orbit, s_now, orbit_end, ele, ele, err_flag, compute_floor_coords = .true.)
-        mat6 = matmul(ele%mat6, mat6)
-        vec0 = matmul(ele%mat6, vec0) + ele%vec0
+        call twiss_and_track_from_s_to_s (branch, orbit, s_now, orbit_end, ele, ele, err_flag, &
+                                                                    compute_floor_coords = .true., compute_twiss = .false.)
         orbit = orbit_end
+        vec0 = matmul(ele%mat6, vec0) + ele%vec0
+        mat6 = matmul(ele%mat6, mat6)  ! Matrix from beginning of branch.
+        ele%vec0 = vec0
+        ele%mat6 = mat6
+        ele%key = hybrid$                  ! So twiss_propagate1 does not get confused.
+        call twiss_propagate1(branch%ele(0), ele, err_flag)
       endif
 
 
       if (cache_status == loading_cache$) then
         tao_branch%plot_cache(ii)%ele      = ele
         tao_branch%plot_cache(ii)%orbit    = orbit
-        tao_branch%plot_cache(ii)%ele%mat6 = mat6
-        tao_branch%plot_cache(ii)%ele%vec0 = vec0
         tao_branch%plot_cache(ii)%err      = err_flag
       endif
 
@@ -2485,7 +2495,7 @@ do ii = 1, size(curve%x_line)
   end select
 
   call this_value_at_s (data_type_select, sub_data_type, value, ii, &
-                               s_last, s_now, tao_branch, orbit, lat, branch, ele, err_flag);  if (err_flag) return
+                            s_last, s_now, tao_branch, orbit, lat, branch, ele, mat6, err_flag);  if (err_flag) return
 
   curve%y_line(ii) = curve%y_line(ii) + comp_sign * value
   s_last = s_now
@@ -2526,7 +2536,7 @@ if (curve%ele_ref_name /= '') then
     endif
 
     call this_value_at_s (data_type_select, sub_data_type, value, ii, &
-                  s_last, s_now, tao_branch, orbit, lat, branch, ele, err_flag);  if (.not. ok) return
+                  s_last, s_now, tao_branch, orbit, lat, branch, ele, mat6, err_flag);  if (.not. ok) return
 
     curve%y_line = curve%y_line - comp_sign * value
   end select
@@ -2539,7 +2549,7 @@ bmad_com%radiation_fluctuations_on = radiation_fluctuations_on
 contains
 
 subroutine this_value_at_s (data_type_select, sub_data_type, value, ii, &
-                                       s_last, s_now, tao_branch, orbit, lat, branch, ele, err_flag)
+                                       s_last, s_now, tao_branch, orbit, lat, branch, ele, mat6, err_flag)
 
 type (coord_struct) orbit, orb_end
 type (tao_lattice_branch_struct) :: tao_branch
@@ -2550,7 +2560,7 @@ type (branch_struct) branch
 type (branch_struct), pointer :: this_branch
 type (twiss_struct), pointer :: z0, z1, z2
 
-real(rp) value, s_last, s_now, ds, m6(6,6), dalpha, dbeta, aa, bb, dE
+real(rp) value, s_last, s_now, ds, m6(6,6), dalpha, dbeta, aa, bb, dE, mat6(6,6)
 integer status, ii, i, j
 logical is_ok, err_flag
 character(*) data_type_select, sub_data_type
