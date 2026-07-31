@@ -86,7 +86,7 @@ type (probe_8) pb8
 type (probe) pb
 
 real(rp) orb(6), orb0(6), e_ij(6,6)
-real(rp) ai(6,6), ki(6,6)
+real(rp) ai(6,6), ki(6,6), beta0
 
 integer, optional :: map_order
 integer i, val_save, nt
@@ -163,7 +163,12 @@ else
   ! For finding the closed orbit the setting of %nocavity must match the setting of %radiaiton
   state2 = state
   state2%nocavity = .not. state2%radiation
-  call find_orbit_x(orb, state2, 1.0d-8, fibre1 = f1)
+  !call find_orbit_x(orb, state2, 1.0d-8, fibre1 = f1)
+  call find_fix_special_real(orb,state2, f1%t1)
+  beta0 = ele1%value(p0c$) / ele1%value(E_tot$)
+  orb(5) = orb(5) / ele1%value(p0c$)
+  call my_vec_ptc_to_bmad(orb, beta0, orb)
+  !write(*,*) "FOO B orb: ", orb
   if (.not. check_stable) then
     if (rad_map%radiation_damping_on) then
       call out_io (s_error$, r_name, 'CANNOT FIND CLOSED ORBIT WITH RADIATION WHEN TRCKING IN PTC!')

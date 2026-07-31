@@ -2987,7 +2987,7 @@ do i = 1, branch%n_ele_track+1
       allocate(ltt_com%sec(n_sec)%map)
       call ptc_setup_map_with_radiation (ltt_com%sec(n_sec)%map, ltt_com%sec(n_sec-1)%ele, ele0, &
                    lttp%map_order, bmad_com%radiation_damping_on, lttp%symplectic_map_tracking, err_flag = err)
-      if (err) stop
+      !FOO if (err) stop
       ltt_com%sec(n_sec)%type = map$
       ltt_com%sec(n_sec)%ele => ele
     endif

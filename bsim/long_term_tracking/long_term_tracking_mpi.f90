@@ -31,10 +31,15 @@ character(40) file, str
 character(40), allocatable :: file_list(:)
 character(MPI_MAX_PROCESSOR_NAME) name
 
+procedure(track1_custom_def) :: track1_custom
+procedure(make_mat6_custom_def) :: make_mat6_custom              
 !
 
 track1_preprocess_ptr => ltt_track1_preprocess
 track1_bunch_hook_ptr => ltt_track1_bunch_hook
+
+track1_custom_ptr => track1_custom
+make_mat6_custom_ptr => make_mat6_custom
 
 ! Initialize MPI
 
@@ -391,7 +396,7 @@ if (ltt_com%mpi_rank == master_rank$) then
     enddo
 
     nt0 = ix_stop_turn(ix_stage-1); nt1 = ix_stop_turn(ix_stage)
-    call ltt_print_mpi_info (lttp, ltt_com, 'Master: Track beam for stage: ' // int_str(ix_stage) // ' (End turn: ' // int_str(nt1) // ')', .true.)
+    call ltt_print_mpi_info (lttp, ltt_com, 'Master: Track beam for stage: ' // int_str(ix_stage) // ' (End turn: ' // int_str(nt1) // ')', .false.)
     call ltt_run_beam_mode(lttp, ltt_com, nt0, nt1, beam2)
 
     do nb = 1, size(beam%bunch)
@@ -445,7 +450,7 @@ else  ! BEAM slave
     if (too_many_dead) exit
 
     nt0 = ix_stop_turn(ix_stage-1); nt1 = ix_stop_turn(ix_stage)
-    call ltt_print_mpi_info (lttp, ltt_com, 'Slave: Track beam for stage: ' // int_str(ix_stage) // ' (End turn: ' // int_str(nt1) // ')', .true.)
+    call ltt_print_mpi_info (lttp, ltt_com, 'Slave: Track beam for stage: ' // int_str(ix_stage) // ' (End turn: ' // int_str(nt1) // ')', .false.)
     call ltt_run_beam_mode(lttp, ltt_com, nt0, nt1, beam2)  ! Beam tracking
 
     ! Send data to master

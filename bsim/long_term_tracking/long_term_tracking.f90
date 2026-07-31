@@ -12,10 +12,16 @@ real(rp) del_time
 integer i, iu
 character(4) prefix
 
+procedure(track1_custom_def) :: track1_custom
+procedure(make_mat6_custom_def) :: make_mat6_custom              
+
 !
 
 track1_preprocess_ptr => ltt_track1_preprocess
 track1_bunch_hook_ptr => ltt_track1_bunch_hook
+
+track1_custom_ptr => track1_custom
+make_mat6_custom_ptr => make_mat6_custom
 
 !
 

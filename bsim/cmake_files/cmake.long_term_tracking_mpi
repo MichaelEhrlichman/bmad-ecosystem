@@ -2,6 +2,8 @@ set (EXENAME long_term_tracking_mpi)
 
 set (SRC_FILES 
 	long_term_tracking/long_term_tracking_mpi.f90
+  track1_custom.f90
+  make_mat6_custom.f90
 )
 
 set (INC_DIRS

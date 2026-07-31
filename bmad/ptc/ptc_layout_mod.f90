@@ -237,24 +237,33 @@ end subroutine add_ptc_layout_to_list
 subroutine ptc_setup_tracking_with_damping_and_excitation (branch, include_damping, include_excitation, ptc_state, closed_orb)
 
 use s_fitting_new
+use pointer_lattice !FOO
 
 type (branch_struct) branch
 type (internal_state) ptc_state
 type (probe) prb
 type (probe_8) prb8
 type (c_damap) cda
+type (fibre), pointer :: f1 !FOO
 
-real(dp) closed_orb(6)
+real(dp) closed_orb(6), beta0
 logical include_damping, include_excitation
 
 ! If including excitation then need to do a setup calculation with envelope on.
+
+f1 => pointer_to_fibre(branch%lat%ele(0)) !FOO
 
 if (include_excitation) then
   call alloc(prb8)
   call alloc(cda) 
 
   ptc_state = ptc_private%base_state + envelope0 + radiation0 
-  call find_orbit_x (branch%ptc%m_t_layout, closed_orb, ptc_state, 1d-8, fibre1 = 1)
+  !FOO call find_orbit_x (branch%ptc%m_t_layout, closed_orb, ptc_state, 1d-8, fibre1 = 1)
+  call find_fix_special_real(closed_orb,ptc_state, f1%t1)
+  beta0 = branch%ele(0)%value(p0c$) / branch%ele(0)%value(E_tot$)
+  closed_orb(5) = closed_orb(5) / branch%ele(0)%value(p0c$)
+  call my_vec_ptc_to_bmad (closed_orb, beta0, closed_orb)
+  !write(*,*) "FOO A orb: ", closed_orb
 
   cda = 1
   prb = closed_orb
@@ -1575,5 +1584,62 @@ state = lost$
 if (do_reset) call reset_aperture_flag()
 
 end subroutine ptc_check_for_lost_particle
+
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!------------------------------------------------------------------------
+!+
+! Subroutine vec_ptc_to_bmad (vec_ptc, beta0, vec_bmad, conversion_mat, state)
+!
+! Routine to convert a PTC orbit vector to a Bmad orbit vector.
+!
+! Input:
+!   vec_ptc(6)  -- real(rp): PTC coordinates.
+!   beta0       -- real(rp): Reference particle velocity
+!
+! Output:
+!   vec_bmad(6)    -- real(rp): Bmad coordinates.
+!   conversion_mat -- real(rp), optional: Jacobian matrix of PTC -> Bmad conversion map.
+!   state          -- integer, optional: Set to lost_pz$ if energy is too low. Set to alive$ otherwise.
+!-
+
+subroutine my_vec_ptc_to_bmad (vec_ptc, beta0, vec_bmad, conversion_mat, state)
+
+implicit none
+
+real(rp) vec_bmad(:), vec_ptc(:)
+real(rp) beta0, vec_temp(6)
+real(rp), optional :: conversion_mat(6,6)
+real(rp) factor1, factor2
+integer, optional :: state
+
+!
+
+if (present(state)) state = alive$
+
+factor1 = 1+2*vec_ptc(5)/beta0+vec_ptc(5)**2
+if (factor1 <= 0) then
+  if (present(state)) state = lost_pz$
+  return
+endif
+
+vec_temp = vec_ptc
+vec_temp(6) = (2*vec_ptc(5)/beta0+vec_ptc(5)**2)/(sqrt(factor1)+1)
+vec_temp(5) = -vec_ptc(6) * (1 + vec_temp(6)) / (1/beta0 + vec_ptc(5))
+
+if (present(conversion_mat)) then
+  call mat_make_unit(conversion_mat)
+  factor1 = sqrt(1+2*vec_ptc(5)/beta0+vec_ptc(5)**2)
+  factor2 = beta0+2*vec_ptc(5)+beta0*vec_ptc(5)**2 
+  conversion_mat(5,5) = beta0*(beta0**2-1)*factor1*vec_ptc(6)/((1+beta0*vec_ptc(5))**2*factor2)
+  conversion_mat(5,6) = -(1+vec_ptc(5)*(2+beta0*vec_ptc(5))/(beta0*(1+factor1)))/(1/beta0+vec_ptc(5))
+  conversion_mat(6,5) = (1+beta0*vec_ptc(5))*factor1/factor2
+  conversion_mat(6,6) = 0
+end if
+
+vec_bmad = vec_temp
+
+end subroutine my_vec_ptc_to_bmad 
+
 
 end module
