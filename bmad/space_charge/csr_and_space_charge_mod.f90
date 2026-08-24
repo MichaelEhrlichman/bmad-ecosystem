@@ -2016,7 +2016,7 @@ do i_step = 0, n_step
     call convert_pc_to (p%p0c * (1 + p%vec(6)), p%species, beta = p%beta)
   enddo
 
-  call save_a_bunch_step (ele, bunch, bunch_track, s0_step+s_start)
+  call save_a_bunch_step (ele, bunch, bunch_track, s0_step)
 
 enddo
 
